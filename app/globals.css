@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f4f1ea;
+  --foreground: #1d140d;
+  --surface: rgba(255, 251, 245, 0.86);
+  --surface-strong: #fffdf8;
+  --border: rgba(94, 68, 43, 0.14);
+  --muted: #6f6254;
+  --accent: #9f7a4f;
+  --accent-strong: #6b4d2e;
+  --navy: #12313b;
+  --success: #3f7c63;
+  --shadow: 0 24px 80px rgba(33, 19, 8, 0.14);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-strong: var(--surface-strong);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-navy: var(--navy);
+  --color-success: var(--success);
+  --font-sans: var(--font-manrope);
+  --font-display: var(--font-fraunces);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-manrope), sans-serif;
+  background-image:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 35%),
+    radial-gradient(circle at top right, rgba(18, 49, 59, 0.12), transparent 30%),
+    linear-gradient(135deg, #efe6d8 0%, #f8f5ee 42%, #ece8df 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(159, 122, 79, 0.22);
+}
+
+.glass-panel {
+  background: linear-gradient(180deg, rgba(255, 253, 248, 0.9), rgba(255, 249, 240, 0.72));
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.luxury-ring {
+  box-shadow:
+    0 0 0 1px rgba(159, 122, 79, 0.18),
+    0 16px 36px rgba(32, 18, 7, 0.1);
+}
+
+.section-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
