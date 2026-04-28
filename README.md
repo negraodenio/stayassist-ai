@@ -1,30 +1,63 @@
 # StayAssist AI
 
-StayAssist AI is a Next.js prototype for premium hotel and residence operations. It includes a polished login flow, guest PWA request cards, and dashboards for concierge queues, property visibility, AI knowledge readiness, billing, and operational settings.
+**AI-Powered Guest Experience & Operations Platform for Hospitality**
 
-## Getting Started
+StayAssist AI is a modern SaaS platform built for:
 
-Install dependencies and run the development server:
+- Hotels  
+- Boutique Hotels  
+- Airbnb Hosts  
+- Property Managers  
+- Serviced Apartments  
+- Short-Term Rental Operators  
 
-```bash
-npm run dev
-```
+It combines **guest self-service**, **real-time operations**, **QR onboarding**, and **AI concierge automation** into one premium platform.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+---
 
-## Scripts
+# Vision
 
-- `npm run dev` starts the local Next.js server.
-- `npm run lint` runs ESLint.
-- `npm run build` creates a production build.
+Hospitality businesses lose time and money every day with:
 
-## App Structure
+- repetitive guest questions  
+- fragmented communication  
+- missed requests  
+- slow response times  
+- poor operational visibility  
+- inconsistent guest experience  
 
-- `app/login` contains the sign-in page and server action redirect.
-- `app/dashboard` renders the main operations workspace.
-- `app/dashboard/requests` renders the live guest requests engine.
-- `app/dashboard/qr` renders QR code management for units.
-- `app/g/[token]` renders the QR-assigned guest PWA.
-- `app/guest` renders a fallback guest PWA demo.
-- `components/login`, `components/guest`, and `components/dashboard` hold the reusable UI.
-- `lib/guest-requests.ts` contains mock local request data and local storage helpers.
+StayAssist AI solves this with a unified digital operations layer.
+
+---
+
+# Core Features
+
+## Guest PWA Experience
+
+No app download required.
+
+Guests scan a QR code and instantly access a mobile concierge portal.
+
+### Includes:
+
+- Request towels  
+- Request cleaning  
+- Report issue  
+- Wi-Fi details  
+- Checkout information  
+- Ask concierge questions  
+- Local recommendations  
+- Multi-language ready
+
+---
+
+## QR Code Deployment System
+
+Each room, apartment, or unit receives a unique QR code.
+
+Examples:
+
+```txt
+/g/a8x92kpl1
+/g/suite804x
+/g/chiadoloft22
