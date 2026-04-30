@@ -35,14 +35,16 @@ export async function POST(req: Request) {
     }
 
     // Clean messages for the LLM (only role and content)
-    const messages = rawMessages.map((m: any) => ({
-      role: m.role,
-      content: m.content
-    })).filter((m: any) => m.role === "user" || m.role === "assistant");
+    console.log("[RAG DEBUG] Messages Received Count:", rawMessages.length);
+    
+    // TESTE RADICAL: Ignorar histórico e pegar apenas a ÚLTIMA mensagem
+    // Se isso funcionar, o problema é a formatação do histórico no PWA
+    const lastMessage = rawMessages[rawMessages.length - 1];
+    const messages = [
+      { role: "user", content: lastMessage.content }
+    ] as any[];
 
-
-    const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
-    const userMessageContent = lastUserMessage?.content || "";
+    const userMessageContent = lastMessage.content;
     
     // Parâmetros da Sessão (Default fallback para testes admin)
     const activeSession = sessionId || "admin-test-session";
@@ -122,7 +124,7 @@ ${knowledgeContext}
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
-        // 6. WhatsApp Alert (Async)
+        // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
           sendRequestWhatsAppAlert({
             id: "chat-escalation",
@@ -137,13 +139,8 @@ ${knowledgeContext}
           } as any).catch(e => console.error("WhatsApp error:", e));
         }
 
-        // 7. Save Memory
-        if (userMessageContent) {
-          saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
-            .catch(e => console.error("Memory save error (user):", e));
-        }
-        saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
-          .catch(e => console.error("Memory save error (assistant):", e));
+        // MEMÓRIA DESATIVADA PARA TESTE
+        console.log(`[RAG DEBUG] Stream Finished. Length: ${text.length}. Memory Save Skipped.`);
       }
     });
 
