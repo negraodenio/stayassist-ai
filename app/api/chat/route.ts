@@ -19,8 +19,15 @@ const openrouter = createOpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { messages: rawMessages, propertyId: rawPropertyId, propertyName, unitName, sessionId, isGuest } = await req.json();
+    const body = await req.json();
+    console.log("[RAG DEBUG] Request received:", JSON.stringify(body));
+    const { messages: rawMessages, propertyId: rawPropertyId, propertyName, unitName, sessionId, isGuest } = body;
     const propertyId = rawPropertyId?.trim();
+
+    // Teste de Conectividade Rápido
+    if (rawMessages[rawMessages.length-1]?.content?.toLowerCase() === "ping") {
+      return new Response("pong - servidor ativo e comunicando!", { status: 200 });
+    }
 
     if (!propertyId) {
       console.error("Chat Error: Missing propertyId");
@@ -149,8 +156,13 @@ ${knowledgeContext}
     return res.toTextStreamResponse({ headers: customHeaders });
 
 
-  } catch (error) {
-    console.error("Chat route error:", error);
-    return new Response("Internal Server Error", { status: 500 });
+  } catch (error: any) {
+    console.error("CRITICAL Chat route error:", error);
+    // Retorna o erro como texto para diagnóstico no PWA
+    return new Response(`Erro do Servidor: ${error.message || "Erro desconhecido"}. Por favor, avise o suporte.`, { 
+      status: 200, // Status 200 para garantir que o PWA mostre a bolha com o erro
+      headers: { "Content-Type": "text/plain; charset=utf-8" }
+    });
   }
 }
+
