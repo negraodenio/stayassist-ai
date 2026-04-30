@@ -3,7 +3,14 @@
 import { useRef, useEffect } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Send, Bot, User, MessageSquare } from "lucide-react";
-import { Message } from "ai";
+
+// Senior approach: Use the types exported by the AI SDK react package
+// or define a local interface that matches the expected structure to avoid build blockers.
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system" | "data";
+  content: string;
+}
 
 export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
@@ -41,7 +48,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
             <p className="text-sm max-w-[200px]">Type a question to test if your uploaded manual is working.</p>
           </div>
         ) : (
-          messages.map((m: Message) => (
+          (messages as ChatMessage[]).map((m) => (
             <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
               <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-navy text-white" : "bg-accent-strong text-white"}`}>
                 {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
