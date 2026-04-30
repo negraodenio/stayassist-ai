@@ -133,6 +133,8 @@ ${knowledgeContext}
         }
         saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
           .catch(e => console.error("Memory save error (assistant):", e));
+        
+        console.log(`[RAG DEBUG] Finished stream. Text length: ${text.length}`);
       }
     });
 
@@ -148,15 +150,14 @@ ${knowledgeContext}
       "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
     };
 
-    if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse({ headers: customHeaders });
-    }
-    if (typeof res.toTextStreamResponse === 'function') {
-      return res.toTextStreamResponse({ headers: customHeaders });
-    }
-    
-    // Fallback absoluto
-    return new Response("Stream format not supported", { status: 500 });
+    // 6. Return standard Text Stream for maximum compatibility with PWA manual parser
+    return res.toTextStreamResponse({ 
+      headers: {
+        ...customHeaders,
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      } 
+    });
 
   } catch (error) {
     console.error("Chat route error:", error);

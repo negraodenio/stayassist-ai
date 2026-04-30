@@ -145,11 +145,20 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       setChatMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", isRAG }]);
 
       const { parseAIStream } = await import("@/lib/stream-parser");
+      let hasReceivedContent = false;
+
       await parseAIStream(reader, (content) => {
+        hasReceivedContent = true;
         setChatMessages(prev =>
           prev.map(m => m.id === assistantId ? { ...m, content } : m)
         );
       });
+
+      if (!hasReceivedContent) {
+        setChatMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content: "O concierge está ocupado no momento. Por favor, tente novamente em instantes." } : m)
+        );
+      }
 
     } catch (err) {
       console.error("Chat error:", err);
