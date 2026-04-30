@@ -64,13 +64,14 @@ export async function POST(req: Request) {
         ];
 
 
-        // 3. Re-ranking (Conditional & Deduplicated)
-        const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
+        // 3. Skip Re-ranking for speed
+        const selectedChunks = combinedChunks.slice(0, 3);
 
         // 4. Token/Context Slicing (Max 4000 chars to avoid LLM limits/costs)
         knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
         console.log(`[RAG DEBUG] Context length: ${knowledgeContext.length}. First 100 chars: ${knowledgeContext.substring(0, 100)}`);
         console.log(`[RAG DEBUG] Messages count: ${messages.length}`);
+        console.log(`[RAG DEBUG] RAG completion successful.`);
 
         // Save Debug Info for Admin UI
         debugInfo = {
@@ -102,13 +103,22 @@ CONTEXT:
 ${knowledgeContext}
 `;
 
+    const customHeaders = {
+      "X-Debug-Info": JSON.stringify({
+        debug: debugInfo,
+        sources: sourcesUsed
+      }),
+      "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
+    };
+
     // 5. LLM Streaming
+    console.log(`[RAG DEBUG] Starting stream with model: google/gemini-2.0-flash-exp`);
     const result = await streamText({
-      model: openrouter("google/gemini-flash-1.5"),
+      model: openrouter("google/gemini-2.0-flash-exp"),
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
-        // 6. WhatsApp Alert (Move to end to prevent stream blocking)
+        // 6. WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
           sendRequestWhatsAppAlert({
             id: "chat-escalation",
@@ -120,39 +130,23 @@ ${knowledgeContext}
             status: "Open",
             createdAt: new Date().toISOString(),
             guestMessage: userMessageContent,
-          } as any).catch((err: any) => console.error("WhatsApp error (async):", err));
+          } as any).catch(e => console.error("WhatsApp error:", e));
         }
 
-        // 7. Save Memory — fire-and-forget
+        // 7. Save Memory
         if (userMessageContent) {
           saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
             .catch(e => console.error("Memory save error (user):", e));
         }
         saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
           .catch(e => console.error("Memory save error (assistant):", e));
-        
-        console.log(`[RAG DEBUG] Finished stream. Text length: ${text.length}`);
       }
     });
 
-
-    // Use a dynamic check for the response method to handle version variations (Vercel SDK TS bug)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const res = result as any;
-    
-    const customHeaders = {
-      "X-Debug-Info": JSON.stringify({
-        debug: debugInfo,      // frontend acessa: debugInfo.debug.memory_used
-        sources: sourcesUsed   // frontend acessa: debugInfo.sources
-      }),
-      "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
-    };
-
-    // 6. Return Data Stream (Standard)
-    if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse({ headers: customHeaders });
-    }
-    return res.toTextStreamResponse({ headers: customHeaders });
+    // 6. Return stable text stream
+    return result.toTextStreamResponse({ 
+      headers: customHeaders 
+    });
 
   } catch (error) {
     console.error("Chat route error:", error);
