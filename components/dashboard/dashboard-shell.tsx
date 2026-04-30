@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { setupHotelAndUnits, addKnowledgeSnippet } from "@/app/dashboard/actions";
+import { setupHotelAndUnits, addKnowledgeSnippet, uploadKnowledgeFile } from "@/app/dashboard/actions";
 import { formatDistanceToNow } from "date-fns";
 
 const navigationItems = [
@@ -74,6 +74,11 @@ export function DashboardShell({
 
   const [addKnowledgeState, addKnowledgeAction, isAddKnowledgePending] = useActionState(
     addKnowledgeSnippet,
+    null
+  );
+
+  const [uploadState, uploadAction, isUploadPending] = useActionState(
+    uploadKnowledgeFile,
     null
   );
 
@@ -304,38 +309,65 @@ export function DashboardShell({
                   description="Add rules, hours, and information that the AI Concierge will use to answer guest questions."
                 />
                 <div className="mt-6 grid gap-6 xl:grid-cols-2">
-                  <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
-                    <h3 className="text-lg font-semibold text-navy mb-4">Add Information</h3>
-                    <form action={addKnowledgeAction} className="flex flex-col gap-4">
-                      <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-navy">Topic</label>
+                  <div className="flex flex-col gap-6">
+                    <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-navy mb-4">Add Information</h3>
+                      <form action={addKnowledgeAction} className="flex flex-col gap-4">
+                        <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">Topic</label>
+                          <input
+                            name="topic"
+                            type="text"
+                            required
+                            placeholder="e.g. Breakfast Hours"
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">Content</label>
+                          <textarea
+                            name="content"
+                            required
+                            rows={4}
+                            placeholder="e.g. Breakfast is served from 07:00 to 10:30 at the main restaurant."
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent resize-none"
+                          ></textarea>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isAddKnowledgePending}
+                          className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50"
+                        >
+                          {isAddKnowledgePending ? "Saving..." : "Save Information"}
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="rounded-[24px] border border-border bg-stone-50/50 p-6 shadow-sm">
+                      <h3 className="text-lg font-semibold text-navy mb-4">Upload Document</h3>
+                      <p className="text-xs text-muted mb-4">Upload a PDF or TXT file to train the AI with multiple pages of rules.</p>
+                      <form action={uploadAction} className="flex flex-col gap-4">
+                        <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
                         <input
-                          name="topic"
-                          type="text"
+                          name="file"
+                          type="file"
                           required
-                          placeholder="e.g. Breakfast Hours"
-                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          accept=".pdf,.txt"
+                          className="w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy file:text-white hover:file:bg-[#1c4755]"
                         />
-                      </div>
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-navy">Content</label>
-                        <textarea
-                          name="content"
-                          required
-                          rows={4}
-                          placeholder="e.g. Breakfast is served from 07:00 to 10:30 at the main restaurant."
-                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent resize-none"
-                        ></textarea>
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={isAddKnowledgePending}
-                        className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50"
-                      >
-                        {isAddKnowledgePending ? "Saving..." : "Save Information"}
-                      </button>
-                    </form>
+                        {uploadState?.error && (
+                          <p className="text-xs text-red-600">{uploadState.error}</p>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={isUploadPending}
+                          className="rounded-xl border border-navy px-4 py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white disabled:opacity-50"
+                        >
+                          {isUploadPending ? "Processing..." : "Upload & Parse Document"}
+                        </button>
+                      </form>
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-4">

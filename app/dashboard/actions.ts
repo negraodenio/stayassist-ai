@@ -98,3 +98,57 @@ export async function deleteKnowledgeSnippet(id: string) {
 
   revalidatePath("/dashboard", "layout");
 }
+
+// @ts-ignore
+import pdf from "pdf-parse";
+
+export async function uploadKnowledgeFile(prevState: unknown, formData: FormData) {
+  const propertyId = formData.get("propertyId") as string;
+  const file = formData.get("file") as File;
+
+  if (!propertyId || !file || file.size === 0) {
+    return { error: "Please select a valid file." };
+  }
+
+  try {
+    let text = "";
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    if (file.type === "application/pdf") {
+      const data = await pdf(buffer);
+      text = data.text;
+    } else if (file.type === "text/plain") {
+      text = buffer.toString("utf-8");
+    } else {
+      return { error: "Unsupported file type. Please upload PDF or TXT." };
+    }
+
+    if (!text || text.trim().length === 0) {
+      return { error: "No text could be extracted from the file." };
+    }
+
+    // Clean up text a bit (remove excessive whitespace)
+    const cleanedText = text.replace(/\s+/g, " ").trim();
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("property_knowledge")
+      .insert({
+        property_id: propertyId,
+        topic: `Document: ${file.name}`,
+        content: cleanedText.slice(0, 30000), // Cap content to prevent huge DB rows for now
+      });
+
+    if (error) {
+      return { error: `Failed to save document: ${error.message}` };
+    }
+
+    revalidatePath("/dashboard", "layout");
+    return { success: true };
+  } catch (err) {
+    console.error("Upload error:", err);
+    return { error: `Error processing file: ${err instanceof Error ? err.message : "Unknown error"}` };
+  }
+}
+
