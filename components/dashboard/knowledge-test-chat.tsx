@@ -1,29 +1,22 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { Send, Bot, User, MessageSquare } from "lucide-react";
 
-/**
- * Senior Pragmatic Approach: 
- * Sometimes library types (like Vercel AI SDK) can be unstable or conflict across versions.
- * To ensure a stable production build, we define a local contract for the chat helpers.
- */
 interface SeniorChatBridge {
   messages: any[];
-  input: string;
-  handleInputChange: (e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>) => void;
-  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  append: (message: { role: "user" | "assistant"; content: string }) => void;
   isLoading: boolean;
 }
 
 export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
-  // Casting to unknown then to our bridge ensures the build passes regardless of library type inconsistencies
+  // Local state to guarantee input tracking
+  const [localInput, setLocalInput] = useState("");
+
   const { 
     messages, 
-    input, 
-    handleInputChange, 
-    handleSubmit, 
+    append, 
     isLoading 
   } = useChat({
     api: "/api/chat",
@@ -34,6 +27,14 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
   } as any) as unknown as SeniorChatBridge;
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!localInput.trim() || isLoading) return;
+    
+    append({ role: "user", content: localInput });
+    setLocalInput(""); // Clear input after sending
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -83,17 +84,17 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
         )}
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-white">
+      <form onSubmit={handleManualSubmit} className="p-4 border-t border-border bg-white">
         <div className="relative">
           <input
-            value={input}
-            onChange={handleInputChange}
+            value={localInput}
+            onChange={(e) => setLocalInput(e.target.value)}
             placeholder="e.g. What is the checkout time?"
             className="w-full rounded-full border border-border bg-stone-50 py-3 pl-5 pr-12 text-sm outline-none focus:border-accent transition"
           />
           <button
             type="submit"
-            disabled={isLoading || !(input?.trim?.() ?? "")}
+            disabled={isLoading || !localInput.trim()}
             className="absolute right-1.5 top-1.5 h-8 w-8 rounded-full bg-navy text-white flex items-center justify-center transition hover:bg-[#1c4755] disabled:opacity-40"
           >
             <Send size={14} />
