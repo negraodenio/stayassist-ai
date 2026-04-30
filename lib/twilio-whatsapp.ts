@@ -37,19 +37,28 @@ function getRequestPriority(type: GuestRequestType) {
   return "Normal";
 }
 
-function buildAlertMessage(request: GuestRequest) {
+function buildAlertMessage(request: GuestRequest & { guestMessage?: string }) {
   const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard/requests`;
 
-  return [
-    "StayAssist Alert",
+  const lines = [
+    "🤖 StayAssist AI — Guest Message",
     "",
-    `${request.property}`,
-    `${request.room} requested ${requestTypeLabels[request.type].toLowerCase()}.`,
-    `Priority: ${getRequestPriority(request.type)}`,
-    "",
-    "Open dashboard to manage:",
-    dashboardUrl,
-  ].join("\n");
+    `🏨 ${request.property}`,
+    `🛎️ ${request.room}`,
+  ];
+
+  if (request.guestMessage) {
+    lines.push("");
+    lines.push(`💬 Guest said: "${request.guestMessage}"`);
+  } else {
+    lines.push(`Requested: ${requestTypeLabels[request.type].toLowerCase()}`);
+  }
+
+  lines.push("");
+  lines.push("📊 Dashboard:");
+  lines.push(dashboardUrl);
+
+  return lines.join("\n");
 }
 
 export async function sendRequestWhatsAppAlert(

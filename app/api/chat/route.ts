@@ -75,22 +75,20 @@ export async function POST(req: Request) {
         console.error("Enterprise RAG Error:", err);
       }
 
-      // Dispara o alerta do WhatsApp APENAS se for Guest real
-      if (userType === "guest") {
-        try {
-          await sendRequestWhatsAppAlert({
-            id: "chat-escalation",
-            propertyId: propertyId,
-            property: "Hotel Concierge Chat",
-            unitId: "chat",
-            room: unitName || "Guest",
-            type: "help" as GuestRequestType,
-            status: "Open",
-            createdAt: new Date().toISOString()
-          });
-        } catch (whatsappErr) {
-          console.error("WhatsApp notification error:", whatsappErr);
-        }
+      // Dispara o alerta do WhatsApp (fire-and-forget — não bloqueia o stream)
+      if (userType === "guest" && userMessageContent) {
+        sendRequestWhatsAppAlert({
+          id: "chat-escalation",
+          propertyId: propertyId,
+          property: unitName ? `Room ${unitName}` : "Guest Chat",
+          unitId: "chat",
+          room: unitName || "Guest",
+          type: "help" as GuestRequestType,
+          status: "Open",
+          createdAt: new Date().toISOString(),
+          // Passa a mensagem do hóspede para incluir no WhatsApp
+          guestMessage: userMessageContent,
+        } as any).catch((err: Error) => console.error("WhatsApp error:", err));
       }
     }
 
