@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
-import { Send, Bot, User, Smartphone } from "lucide-react";
+import { Send, Bot, User, Smartphone, CheckCircle2 } from "lucide-react";
 import {
   type GuestRequest,
   type GuestRequestType,
@@ -96,6 +96,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     body: {
       propertyId: unit?.propertyId,
       unitName: unit?.name,
+      sessionId: token || "guest-anonymous-session",
+      isGuest: true
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any) as any;
@@ -320,14 +322,22 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                       }`}>
                         {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
                       </div>
-                      <div
-                        className={`max-w-[85%] rounded-[22px] px-5 py-3 text-sm leading-7 shadow-sm ${
-                          m.role === "user"
-                            ? "bg-navy text-white rounded-tr-none"
-                            : "bg-white border border-border text-navy rounded-tl-none"
-                        }`}
-                      >
-                        {m.content}
+                      <div className="flex flex-col gap-1 max-w-[85%]">
+                        <div
+                          className={`rounded-[22px] px-5 py-3 text-sm leading-7 shadow-sm ${
+                            m.role === "user"
+                              ? "bg-navy text-white rounded-tr-none"
+                              : "bg-white border border-border text-navy rounded-tl-none"
+                          }`}
+                        >
+                          {m.content}
+                        </div>
+                        {/* Trust Badge para RAG */}
+                        {m.role === "assistant" && m.annotations && m.annotations.some((a: any) => a.isRAG) && (
+                          <div className="flex items-center gap-1 text-[10px] text-muted/70 pl-3">
+                            <CheckCircle2 size={10} /> Based on property information
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))

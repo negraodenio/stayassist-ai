@@ -10,37 +10,34 @@ interface LocalMessage {
 }
 
 export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
-  // 100% Controlled Native State (No Vercel SDK Bugs)
   const [localInput, setLocalInput] = useState("");
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, debugInfo]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const textToSend = localInput.trim();
     
-    // Hard block against empty submissions or double-clicks
     if (!textToSend || isLoading) return;
     
-    // Add user message to UI immediately
     const userMsg: LocalMessage = { id: Date.now().toString(), role: "user", content: textToSend };
     const newMessages = [...messages, userMsg];
     
     setMessages(newMessages);
-    setLocalInput(""); // Clear input box instantly
+    setLocalInput("");
     setIsLoading(true);
+    setDebugInfo(null); // Clear previous debug
 
     try {
-      // Native fetch bypassing all Vercel SDK hooks
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,12 +45,13 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
           messages: newMessages,
           propertyId,
           unitName: "Admin Test",
+          sessionId: "admin-debug-session", // Unique session for admin memory testing
+          isGuest: false
         }),
       });
 
       if (!response.ok) throw new Error("Network response was not ok");
 
-      // Handle streaming response natively
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let done = false;
@@ -61,7 +59,6 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
 
       const assistantMsgId = (Date.now() + 1).toString();
 
-      // Add empty assistant message to UI
       setMessages((prev) => [...prev, { id: assistantMsgId, role: "assistant", content: "" }]);
 
       while (reader && !done) {
@@ -69,29 +66,35 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
         done = doneReading;
         if (value) {
           const chunk = decoder.decode(value);
-          // Vercel AI SDK streams chunks prefixed with "0:" (DataStream protocol)
-          const cleanChunk = chunk.split("\n").map(line => {
-             if (line.startsWith("0:")) return JSON.parse(line.substring(2));
-             return "";
-          }).join("");
-
-          assistantContent += cleanChunk;
           
-          setMessages((prev) => 
-            prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
-          );
+          chunk.split("\n").forEach(line => {
+             if (line.startsWith("0:")) {
+                 assistantContent += JSON.parse(line.substring(2));
+                 setMessages((prev) => 
+                   prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
+                 );
+             } else if (line.startsWith("2:")) {
+                 // Capture Vercel SDK Data Stream
+                 try {
+                     const dataArr = JSON.parse(line.substring(2));
+                     if (dataArr.length > 0 && dataArr[0].debug) {
+                         setDebugInfo(dataArr[0]);
+                     }
+                 } catch(e) {}
+             }
+          });
         }
       }
     } catch (error) {
       console.error("Chat Error:", error);
       setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Error connecting to AI. Please check your console." }]);
     } finally {
-      setIsLoading(false); // ALWAYS release the loading lock
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-[600px] rounded-[24px] border border-border bg-white overflow-hidden shadow-sm">
+    <div className="flex flex-col h-[650px] rounded-[24px] border border-border bg-white overflow-hidden shadow-sm">
       <div className="p-5 border-b border-border bg-stone-50/50 flex items-center gap-3">
         <div className="h-10 w-10 rounded-xl bg-navy flex items-center justify-center text-white">
           <MessageSquare size={20} />
@@ -128,6 +131,39 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
             <div className="p-3 rounded-2xl bg-stone-100 text-muted text-xs animate-pulse rounded-tl-none">
               AI is searching your manual...
             </div>
+          </div>
+        )}
+        
+        {/* Debug Panel - Enterprise Venda */}
+        {debugInfo && !isLoading && (
+          <div className="mt-4 p-3 bg-stone-100 rounded-xl border border-border text-xs text-navy/80 font-mono">
+            <div className="font-semibold mb-2 flex items-center gap-2">
+              <Bot size={12} /> AI Logic Trace
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <div className="bg-white p-2 rounded border border-border/50">
+                <div className="text-[10px] text-muted uppercase">Memory Chunks</div>
+                <div className="font-bold">{debugInfo.debug.memory_used}</div>
+              </div>
+              <div className="bg-white p-2 rounded border border-border/50">
+                <div className="text-[10px] text-muted uppercase">Knowledge Chunks</div>
+                <div className="font-bold">{debugInfo.debug.knowledge_used}</div>
+              </div>
+              <div className="bg-white p-2 rounded border border-border/50">
+                <div className="text-[10px] text-muted uppercase">After Rerank</div>
+                <div className="font-bold text-accent-strong">{debugInfo.debug.reranked}</div>
+              </div>
+            </div>
+            {debugInfo.sources && debugInfo.sources.length > 0 && (
+              <div className="bg-white p-2 rounded border border-border/50 mt-2">
+                <div className="text-[10px] text-muted uppercase mb-1">Sources Referenced</div>
+                <ul className="list-disc pl-4 space-y-1">
+                  {debugInfo.sources.map((src: string, i: number) => (
+                    <li key={i}>{src}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
