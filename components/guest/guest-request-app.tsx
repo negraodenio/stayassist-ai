@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
-import { useChat } from "@ai-sdk/react";
+import { useEffect, useState, useRef } from "react";
 import { Send, Bot, User, Smartphone, CheckCircle2 } from "lucide-react";
 import {
   type GuestRequest,
@@ -9,6 +8,13 @@ import {
   type GuestUnit,
 } from "@/lib/guest-requests";
 import { translations, type SupportedLanguage } from "@/lib/translations";
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  isRAG?: boolean;
+}
 
 type RequestState = "idle" | "loading" | "saving" | "error";
 
@@ -24,6 +30,11 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   const [pendingType, setPendingType] = useState<GuestRequestType | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [lang, setLang] = useState<SupportedLanguage>("en");
+
+  // Chat state (manual fetch — avoids useChat SDK version bugs)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const t = translations[lang];
 
@@ -91,22 +102,76 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     return () => { active = false; };
   }, [token]);
 
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
-    api: "/api/chat",
-    body: {
-      propertyId: unit?.propertyId,
-      unitName: unit?.name,
-      sessionId: token || "guest-anonymous-session",
-      isGuest: true
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } as any) as any;
-  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [chatMessages, chatLoading]);
+
+  async function handleChatSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const text = chatInput.trim();
+    if (!text || chatLoading || !unit?.propertyId) return;
+
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: text };
+    const updatedMessages = [...chatMessages, userMsg];
+    setChatMessages(updatedMessages);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: updatedMessages,
+          propertyId: unit.propertyId,
+          unitName: unit.name,
+          sessionId: token || "guest-anonymous-session",
+          isGuest: true,
+        }),
+      });
+
+      if (!response.ok) throw new Error("Network error");
+
+      // Check RAG flag from header
+      const isRAG = response.headers.get("X-Is-Rag") === "true";
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let content = "";
+      const assistantId = (Date.now() + 1).toString();
+
+      setChatMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", isRAG }]);
+
+      while (reader && !done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          let isDataStream = false;
+          chunk.split("\n").forEach(line => {
+            if (line.startsWith("0:")) {
+              isDataStream = true;
+              try { content += JSON.parse(line.substring(2)); } catch(e) {}
+            } else if (line.startsWith("d:") || line.startsWith("2:")) {
+              isDataStream = true;
+            }
+          });
+          if (!isDataStream) content += chunk;
+          setChatMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content } : m)
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Chat error:", err);
+      setChatMessages(prev => [...prev, { id: Date.now().toString(), role: "assistant", content: "Sorry, I'm having trouble connecting. Please try again." }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
 
   async function refreshRequests() {
     if (!unit) return;
@@ -304,13 +369,13 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
           <div className="flex flex-1 flex-col bg-white/40 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
               <div className="space-y-6">
-                {messages.length === 0 ? (
+                {chatMessages.length === 0 ? (
                   <div className="text-center text-muted text-sm mt-20">
                     <Bot className="w-12 h-12 mx-auto mb-4 opacity-20" />
                     <p className="max-w-[200px] mx-auto text-muted/60">{t.chatSubtitle}</p>
                   </div>
                 ) : (
-                  messages.map((m: any) => (
+                  chatMessages.map((m) => (
                     <div
                       key={m.id}
                       className={`flex gap-3 ${
@@ -333,7 +398,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                           {m.content}
                         </div>
                         {/* Trust Badge para RAG */}
-                        {m.role === "assistant" && m.annotations && m.annotations.some((a: any) => a.isRAG) && (
+                        {m.role === "assistant" && m.isRAG && (
                           <div className="flex items-center gap-1 text-[10px] text-muted/70 pl-3">
                             <CheckCircle2 size={10} /> Based on property information
                           </div>
@@ -342,7 +407,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                     </div>
                   ))
                 )}
-                {isLoading && (
+                {chatLoading && (
                   <div className="flex gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-strong text-white shadow-sm">
                       <Bot size={14} />
@@ -357,19 +422,20 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
             </div>
 
             <form
-              onSubmit={handleSubmit}
+              onSubmit={handleChatSubmit}
               className="border-t border-border bg-white p-4 sm:p-6"
             >
               <div className="relative flex items-center">
                 <input
-                  value={input}
-                  onChange={handleInputChange}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
                   placeholder={t.chatPlaceholder}
-                  className="w-full rounded-full border border-border bg-stone-50 py-4 pl-6 pr-14 text-sm outline-none transition focus:border-accent luxury-ring"
+                  disabled={chatLoading || !unit?.propertyId}
+                  className="w-full rounded-full border border-border bg-stone-50 py-4 pl-6 pr-14 text-sm outline-none transition focus:border-accent luxury-ring disabled:opacity-60"
                 />
                 <button
                   type="submit"
-                  disabled={isLoading || !(input?.trim?.() ?? "")}
+                  disabled={chatLoading || !chatInput.trim() || !unit?.propertyId}
                   className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white transition hover:bg-[#1c4755] disabled:opacity-45"
                 >
                   <Send size={18} />
