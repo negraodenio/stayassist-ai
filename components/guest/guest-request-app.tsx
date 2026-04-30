@@ -359,7 +359,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                 />
                 <button
                   type="submit"
-                  disabled={isLoading || !input.trim()}
+                  disabled={isLoading || !(input?.trim?.() ?? "")}
                   className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white transition hover:bg-[#1c4755] disabled:opacity-45"
                 >
                   <Send size={18} />

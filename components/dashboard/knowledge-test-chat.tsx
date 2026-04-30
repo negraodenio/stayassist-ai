@@ -93,7 +93,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
           />
           <button
             type="submit"
-            disabled={isLoading || !input.trim()}
+            disabled={isLoading || !(input?.trim?.() ?? "")}
             className="absolute right-1.5 top-1.5 h-8 w-8 rounded-full bg-navy text-white flex items-center justify-center transition hover:bg-[#1c4755] disabled:opacity-40"
           >
             <Send size={14} />
