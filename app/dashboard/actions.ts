@@ -19,10 +19,22 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
+  // 0. Get the current user to associate with the property
+  const authClient = await createClient();
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) return { error: "User not authenticated." };
+
+  const slug = hotelName.toLowerCase().trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
+
   // 1. Create Organization
   const { data: org, error: orgError } = await supabase
     .from("organizations")
-    .insert({ name: `${hotelName} Group` })
+    .insert({ 
+      name: `${hotelName} Group`,
+      slug: slug
+    })
     .select()
     .single();
 
@@ -33,13 +45,18 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
   // 2. Create Property
   const { data: property, error: propError } = await supabase
     .from("properties")
-    .insert({ name: hotelName, organization_id: org.id })
+    .insert({ 
+      name: hotelName, 
+      organization_id: org.id,
+      user_id: user.id 
+    })
     .select()
     .single();
 
   if (propError) {
     return { error: `Failed to create property: ${propError.message}` };
   }
+
 
   // 3. Create Units
   const unitsToInsert = Array.from({ length: unitsCount }).map((_, i) => ({
