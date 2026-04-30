@@ -104,17 +104,14 @@ ${knowledgeContext}
 `;
 
     const customHeaders = {
-      "X-Debug-Info": JSON.stringify({
-        debug: debugInfo,
-        sources: sourcesUsed
-      }),
       "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
     };
 
+
     // 5. LLM Streaming
-    console.log(`[RAG DEBUG] Starting stream with model: google/gemini-2.0-flash-exp`);
+    console.log(`[RAG DEBUG] Starting stream with stable model: google/gemini-2.0-flash-001`);
     const result = await streamText({
-      model: openrouter("google/gemini-2.0-flash-exp"),
+      model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
@@ -143,10 +140,14 @@ ${knowledgeContext}
       }
     });
 
-    // 6. Return stable text stream
-    return result.toTextStreamResponse({ 
-      headers: customHeaders 
-    });
+
+    // 6. Return standard DataStream
+    const res = result as any;
+    if (typeof res.toDataStreamResponse === 'function') {
+      return res.toDataStreamResponse({ headers: customHeaders });
+    }
+    return res.toTextStreamResponse({ headers: customHeaders });
+
 
   } catch (error) {
     console.error("Chat route error:", error);
