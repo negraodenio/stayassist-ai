@@ -110,7 +110,7 @@ ${knowledgeContext}
 
     // 5. LLM Streaming
     const result = await streamText({
-      model: openrouter.chat("google/gemini-1.5-pro-latest"),
+      model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
       onFinish: async ({ text }) => {

@@ -18,8 +18,8 @@ export async function rerankChunks(question: string, chunks: string[]) {
 
   try {
     const result = await generateObject({
-      // Usando gemini-1.5-flash ou pro via OpenRouter para velocidade/custo
-      model: openrouter.chat("google/gemini-1.5-flash"),
+      // Usando gemini-2.0-flash via OpenRouter para velocidade/custo garantido
+      model: openrouter("google/gemini-2.0-flash-001"),
       schema: z.object({
         selected: z.array(z.string()).describe("Array das strings de conteúdo mais úteis"),
       }),
