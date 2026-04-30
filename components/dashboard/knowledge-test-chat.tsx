@@ -31,7 +31,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
       propertyId,
       unitName: "Admin Test",
     },
-  }) as unknown as SeniorChatBridge;
+  } as any) as unknown as SeniorChatBridge;
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
