@@ -74,7 +74,7 @@ export async function POST(req: Request) {
 
         // Save Debug Info for Admin UI
         debugInfo = {
-          memory_used: memoryChunks.length,
+          memory_used: 0, // History is now handled natively by LLM messages
           knowledge_used: ragChunks.length,
           reranked: selectedChunks.length,
         };
