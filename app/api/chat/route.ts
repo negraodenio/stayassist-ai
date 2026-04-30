@@ -6,6 +6,10 @@ import { createClient } from "@/utils/supabase/server";
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY,
+  headers: {
+    "HTTP-Referer": "https://stayassist-ai.com",
+    "X-Title": "StayAssist AI Concierge",
+  },
 });
 
 export async function POST(req: Request) {
@@ -31,19 +35,26 @@ export async function POST(req: Request) {
         .join("\n\n");
     }
 
-    const systemPrompt = `You are a highly polite, professional luxury hotel AI Concierge named StayAssist AI.
+    const systemPrompt = `You are a professional luxury hotel AI Concierge named StayAssist AI.
     
 Current context:
 - You are assisting the guest staying in ${unitName || "a room"}.
 - Be extremely concise, elegant, and helpful. Always adopt a 5-star hospitality tone.
-- Do NOT hallucinate policies. If the guest asks about policies, hours, or hotel features, ONLY use the Hotel Knowledge provided below.
 
 === HOTEL KNOWLEDGE ===
 ${knowledgeContext}
 =======================
 
-If the guest asks for local recommendations (restaurants, places, etc), use the search_nearby_places tool.
-If the answer is in the Hotel Knowledge, provide it accurately and politely. If not, politely state you don't have that specific information and suggest they contact the front desk.`;
+CRITICAL INSTRUCTIONS FOR RECOMMENDATIONS:
+1. When a guest asks for local recommendations (restaurants, sights, services):
+   - FIRST, check the "HOTEL KNOWLEDGE" section above. If the hotel owner has provided specific recommendations or partners, prioritize these in your answer.
+   - SECOND, if the requested information is not in the Hotel Knowledge, or if the guest asks for more variety, use the 'search_nearby_places' tool to fetch live data from Google.
+   - ALWAYS prefer the hotel's own suggestions if available.
+   - NEVER ignore the hotel knowledge. It represents the owner's curated recommendations and partnerships.
+
+2. If the guest asks about hotel internal policies (wifi, breakfast, checkout):
+   - ONLY use the Hotel Knowledge. Do not use external tools.
+   - If not found, suggest contacting the front desk.`;
 
     // 3. Define Tools
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,6 +113,7 @@ If the answer is in the Hotel Knowledge, provide it accurately and politely. If 
       system: systemPrompt,
       messages,
       tools,
+      temperature: 0.3,
     });
 
     // Use a dynamic check for the response method to handle version variations
