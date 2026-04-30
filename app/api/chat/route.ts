@@ -85,22 +85,8 @@ export async function POST(req: Request) {
       } catch (err) {
         console.error("Enterprise RAG Error:", err);
       }
-
-      // Dispara o alerta do WhatsApp (fire-and-forget — não bloqueia o stream)
-      if (userType === "guest" && userMessageContent) {
-        sendRequestWhatsAppAlert({
-          id: "chat-escalation",
-          propertyId: propertyId,
-          property: propertyName || unitName || "StayAssist Guest",
-          unitId: "chat",
-          room: unitName || "Guest",
-          type: "help" as GuestRequestType,
-          status: "Open",
-          createdAt: new Date().toISOString(),
-          guestMessage: userMessageContent,
-        } as any).catch((err: Error) => console.error("WhatsApp error:", err));
-      }
     }
+
 
     const systemPrompt = `You are a professional luxury hotel AI Concierge named StayAssist AI.
 Polite, concise, and incredibly helpful. 
@@ -118,13 +104,26 @@ ${knowledgeContext}
 
     // 5. LLM Streaming
     const result = await streamText({
-      model: openrouter("google/gemini-2.0-flash-001"),
-
-
+      model: openrouter("google/gemini-flash-1.5"),
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
-        // 6. Save Memory — fire-and-forget (never blocks the stream)
+        // 6. WhatsApp Alert (Move to end to prevent stream blocking)
+        if (isGuest && userMessageContent) {
+          sendRequestWhatsAppAlert({
+            id: "chat-escalation",
+            propertyId: propertyId,
+            property: propertyName || unitName || "StayAssist Guest",
+            unitId: "chat",
+            room: unitName || "Guest",
+            type: "help" as any,
+            status: "Open",
+            createdAt: new Date().toISOString(),
+            guestMessage: userMessageContent,
+          } as any).catch((err: any) => console.error("WhatsApp error (async):", err));
+        }
+
+        // 7. Save Memory — fire-and-forget
         if (userMessageContent) {
           saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
             .catch(e => console.error("Memory save error (user):", e));
@@ -135,6 +134,7 @@ ${knowledgeContext}
         console.log(`[RAG DEBUG] Finished stream. Text length: ${text.length}`);
       }
     });
+
 
     // Use a dynamic check for the response method to handle version variations (Vercel SDK TS bug)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
