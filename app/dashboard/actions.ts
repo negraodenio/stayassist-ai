@@ -124,7 +124,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
       return { error: "Unsupported file type. Please upload PDF or TXT." };
     }
 
-    if (!text || text.trim().length === 0) {
+    if (!text || (text || "").trim().length === 0) {
       return { error: "No text could be extracted from the file." };
     }
 
