@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  fallbackGuestRequests,
   formatRequestTime,
   requestTypeLabels,
   type GuestRequest,
@@ -24,7 +23,7 @@ function statusClass(status: GuestRequestStatus) {
 }
 
 export function RequestsBoard() {
-  const [requests, setRequests] = useState<GuestRequest[]>(fallbackGuestRequests);
+  const [requests, setRequests] = useState<GuestRequest[]>([]);
   const [statusFilter, setStatusFilter] = useState<GuestRequestStatus | "All">("All");
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -44,15 +43,10 @@ export function RequestsBoard() {
 
       const payload = (await response.json()) as {
         requests: GuestRequest[];
-        usingFallback: boolean;
       };
 
       setRequests(payload.requests);
-      setNotice(
-        payload.usingFallback
-          ? "Supabase is not configured yet, so demo data is showing."
-          : null,
-      );
+      setNotice(null);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to load requests.");
     } finally {

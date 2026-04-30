@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  fallbackGuestRequests,
-  fallbackUnits,
   formatRequestTime,
   requestTypeDescriptions,
   requestTypeIntents,
@@ -22,10 +20,8 @@ type GuestRequestAppProps = {
 };
 
 export function GuestRequestApp({ token }: GuestRequestAppProps) {
-  const [requests, setRequests] = useState<GuestRequest[]>(fallbackGuestRequests);
-  const [unit, setUnit] = useState<GuestUnit | null>(
-    token ? null : fallbackUnits[0] || null,
-  );
+  const [requests, setRequests] = useState<GuestRequest[]>([]);
+  const [unit, setUnit] = useState<GuestUnit | null>(null);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [state, setState] = useState<RequestState>("loading");
   const [notice, setNotice] = useState<string | null>(null);
@@ -35,25 +31,10 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
     async function loadGuestData() {
       try {
-        const [unitResponse, requestsResponse] = await Promise.all([
-          token ? fetch(`/api/guest-unit/${token}`) : fetch("/api/guest-options"),
-          fetch("/api/requests"),
-        ]);
-
-        if (!requestsResponse.ok) {
-          throw new Error("Unable to load guest requests.");
-        }
-
-        const requestsPayload = (await requestsResponse.json()) as {
-          requests: GuestRequest[];
-          usingFallback: boolean;
-        };
-
-        if (!active) {
-          return;
-        }
+        let unitIdToFetch: string | undefined;
 
         if (token) {
+          const unitResponse = await fetch(`/api/guest-unit/${token}`);
           if (!unitResponse.ok) {
             const payload = (await unitResponse.json().catch(() => ({}))) as {
               message?: string;
@@ -63,30 +44,32 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
           const unitPayload = (await unitResponse.json()) as {
             unit: GuestUnit;
-            usingFallback: boolean;
           };
 
           setUnit(unitPayload.unit);
-          setNotice(
-            unitPayload.usingFallback || requestsPayload.usingFallback
-              ? "Supabase is not configured yet, so demo data is showing."
-              : null,
-          );
+          unitIdToFetch = unitPayload.unit?.id;
+          setNotice(null);
         } else {
+          const unitResponse = await fetch("/api/guest-options");
           const optionsPayload = (await unitResponse.json()) as {
             units: GuestUnit[];
-            usingFallback: boolean;
           };
 
-          setUnit(optionsPayload.units[0] || fallbackUnits[0] || null);
-          setNotice(
-            optionsPayload.usingFallback || requestsPayload.usingFallback
-              ? "Demo guest link. Scan a room QR code for an assigned stay."
-              : "Demo guest link. Scan a room QR code for an assigned stay.",
-          );
+          setUnit(optionsPayload.units[0] || null);
+          unitIdToFetch = optionsPayload.units[0]?.id;
+          setNotice("Demo guest link. Scan a room QR code for an assigned stay.");
         }
 
-        setRequests(requestsPayload.requests);
+        if (unitIdToFetch) {
+          const requestsResponse = await fetch(`/api/requests?unitId=${unitIdToFetch}`);
+          if (!requestsResponse.ok) {
+            throw new Error("Unable to load guest requests.");
+          }
+          const requestsPayload = (await requestsResponse.json()) as {
+            requests: GuestRequest[];
+          };
+          setRequests(requestsPayload.requests);
+        }
         setState("idle");
       } catch (error) {
         if (!active) {
@@ -114,7 +97,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   );
 
   async function refreshRequests() {
-    const response = await fetch("/api/requests");
+    if (!unit) return;
+    const response = await fetch(`/api/requests?unitId=${unit.id}`);
 
     if (!response.ok) {
       throw new Error("Unable to refresh requests.");
@@ -122,7 +106,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
     const payload = (await response.json()) as {
       requests: GuestRequest[];
-      usingFallback: boolean;
     };
 
     setRequests(payload.requests);

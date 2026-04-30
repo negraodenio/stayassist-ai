@@ -1,6 +1,15 @@
+"use client";
+
+import { useActionState } from "react";
 import { signIn } from "@/app/login/actions";
 
+const initialState = {
+  message: "",
+};
+
 export function LoginForm() {
+  const [state, formAction, pending] = useActionState(signIn, initialState);
+
   return (
     <div className="glass-panel luxury-ring w-full max-w-md rounded-[32px] p-6 sm:p-8">
       <div className="mb-8">
@@ -15,14 +24,16 @@ export function LoginForm() {
         </p>
       </div>
 
-      <form action={signIn} className="space-y-5">
+      <form action={formAction} className="space-y-5">
         <div className="space-y-2">
           <label className="text-sm font-semibold text-navy" htmlFor="email">
             Email
           </label>
           <input
             id="email"
+            name="email"
             type="email"
+            required
             placeholder="you@stayassist.ai"
             className="w-full rounded-2xl border border-border bg-white/90 px-4 py-3 text-navy outline-none transition placeholder:text-muted/70 focus:border-accent"
           />
@@ -33,20 +44,22 @@ export function LoginForm() {
             <label className="text-sm font-semibold text-navy" htmlFor="password">
               Password
             </label>
-            <button
-              type="button"
-              className="text-sm font-medium text-accent-strong transition hover:text-navy"
-            >
-              Forgot password?
-            </button>
           </div>
           <input
             id="password"
+            name="password"
             type="password"
+            required
             placeholder="Enter your password"
             className="w-full rounded-2xl border border-border bg-white/90 px-4 py-3 text-navy outline-none transition placeholder:text-muted/70 focus:border-accent"
           />
         </div>
+
+        {state?.message && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+            {state.message}
+          </div>
+        )}
 
         <div className="flex items-center justify-between rounded-2xl border border-border bg-white/70 px-4 py-3 text-sm text-muted">
           <span>Enterprise workspace</span>
@@ -55,9 +68,10 @@ export function LoginForm() {
 
         <button
           type="submit"
-          className="w-full rounded-2xl bg-navy px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+          disabled={pending}
+          className="w-full rounded-2xl bg-navy px-4 py-3 text-center text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-70"
         >
-          Sign in
+          {pending ? "Signing in..." : "Sign in"}
         </button>
       </form>
     </div>

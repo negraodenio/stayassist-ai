@@ -12,7 +12,6 @@ export async function GET(
     return NextResponse.json(
       {
         message: "Guest stay not found for this QR code.",
-        usingFallback: result.usingFallback,
       },
       { status: 404 },
     );

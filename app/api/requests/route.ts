@@ -6,10 +6,26 @@ import {
 import type { GuestRequestType } from "@/lib/guest-requests";
 import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
 
-export async function GET() {
-  const result = await listGuestRequests();
+import { createClient } from "@/utils/supabase/server";
 
-  return NextResponse.json(result);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const unitId = searchParams.get("unitId");
+
+  if (!unitId) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+  }
+
+  try {
+    const result = await listGuestRequests(unitId || undefined);
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json({ message: error instanceof Error ? error.message : "Error" }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import type { GuestUnit } from "@/lib/guest-requests";
 
 type LoadState = "idle" | "loading" | "saving" | "error";
@@ -231,10 +232,13 @@ export function QrManagement() {
                     </div>
                     <div>
                       {unit.qrToken ? (
-                        <img
+                        <Image
                           alt={`QR code for ${unit.name}`}
                           className="h-20 w-20 rounded-xl border border-border bg-white p-1"
                           src={getQrImageUrl(guestUrl, 160)}
+                          width={80}
+                          height={80}
+                          unoptimized
                         />
                       ) : (
                         <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-border bg-white/60 text-xs font-semibold uppercase tracking-[0.2em] text-muted">
@@ -302,10 +306,13 @@ export function QrManagement() {
               {previewUnit.propertyName}
             </h2>
             <p className="mt-1 font-semibold text-muted">{previewUnit.name}</p>
-            <img
+            <Image
               alt={`QR code for ${previewUnit.name}`}
               className="mx-auto mt-6 h-72 w-72 rounded-[24px] border border-border bg-white p-4"
               src={getQrImageUrl(getGuestUrl(previewUnit.qrToken), 520)}
+              width={288}
+              height={288}
+              unoptimized
             />
             <p className="mt-5 break-all rounded-2xl bg-white/75 px-4 py-3 text-sm text-muted">
               {getGuestUrl(previewUnit.qrToken)}

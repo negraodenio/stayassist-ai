@@ -1,136 +1,10 @@
-import {
-  fallbackGuestRequests,
-  fallbackOrganizations,
-  fallbackUnits,
-  type GuestOrganization,
-  type GuestRequest,
-  type GuestRequestStatus,
-  type GuestRequestType,
-  type GuestUnit,
+import { createClient } from "@/utils/supabase/server";
+import type {
+  GuestOrganization,
+  GuestRequestStatus,
+  GuestRequestType,
+  GuestUnit,
 } from "@/lib/guest-requests";
-
-type SupabasePropertyRow = {
-  id: string;
-  name: string | null;
-  organization_id?: string | null;
-};
-
-type SupabaseOrganizationRow = {
-  id: string;
-  name: string | null;
-};
-
-type SupabaseUnitRow = {
-  id: string;
-  name: string | null;
-  qr_token?: string | null;
-  qr_created_at?: string | null;
-  qr_regenerated_count?: number | null;
-  property_id: string | null;
-  properties?: SupabasePropertyRow | SupabasePropertyRow[] | null;
-};
-
-type SupabaseRequestRow = {
-  id: string;
-  organization_id: string | null;
-  property_id: string | null;
-  unit_id: string | null;
-  category: GuestRequestType;
-  status: GuestRequestStatus;
-  created_at: string;
-  properties?: SupabasePropertyRow | SupabasePropertyRow[] | null;
-  units?: {
-    id?: string;
-    name?: string | null;
-  } | Array<{
-    id?: string;
-    name?: string | null;
-  }> | null;
-};
-
-type SupabaseError = {
-  message?: string;
-  error?: string;
-};
-
-function getSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const key = serviceRoleKey || anonKey;
-
-  if (!url || !key) {
-    return null;
-  }
-
-  return {
-    restUrl: `${url.replace(/\/$/, "")}/rest/v1`,
-    key,
-  };
-}
-
-function getRelationName<T extends { name?: string | null }>(
-  relation: T | T[] | null | undefined,
-  fallback: string,
-) {
-  if (Array.isArray(relation)) {
-    return relation[0]?.name || fallback;
-  }
-
-  return relation?.name || fallback;
-}
-
-function getRelation<T>(relation: T | T[] | null | undefined) {
-  return Array.isArray(relation) ? relation[0] : relation;
-}
-
-async function supabaseFetch<T>(
-  path: string,
-  init?: RequestInit,
-): Promise<{ data: T; usingFallback: false } | { data: T; usingFallback: true }> {
-  const config = getSupabaseConfig();
-
-  if (!config) {
-    throw new Error("Supabase environment variables are not configured.");
-  }
-
-  const response = await fetch(`${config.restUrl}${path}`, {
-    ...init,
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...init?.headers,
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as SupabaseError;
-    throw new Error(payload.message || payload.error || "Supabase request failed.");
-  }
-
-  const data = (await response.json()) as T;
-
-  return { data, usingFallback: false };
-}
-
-function mapRequest(row: SupabaseRequestRow): GuestRequest {
-  const property = getRelationName(row.properties, "Unknown property");
-  const unit = getRelation(row.units);
-
-  return {
-    id: row.id,
-    propertyId: row.property_id || "",
-    property,
-    unitId: row.unit_id || "",
-    room: unit?.name || "Unassigned unit",
-    type: row.category,
-    status: row.status,
-    createdAt: row.created_at,
-  };
-}
 
 const requestMessageByType: Record<GuestRequestType, string> = {
   towels: "Please send fresh towels.",
@@ -142,131 +16,117 @@ const requestMessageByType: Record<GuestRequestType, string> = {
 export async function listGuestOptions(): Promise<{
   organizations: GuestOrganization[];
   units: GuestUnit[];
-  usingFallback: boolean;
 }> {
-  try {
-    const [organizationsResult, unitsResult] = await Promise.all([
-      supabaseFetch<SupabaseOrganizationRow[]>(
-        "/organizations?select=id,name&order=name.asc",
-      ),
-      supabaseFetch<SupabaseUnitRow[]>(
-        "/units?select=id,name,qr_token,property_id,properties(id,name,organization_id)&order=name.asc",
-      ),
-    ]);
+  const supabase = await createClient();
 
-    return {
-      organizations: organizationsResult.data.map((organization) => ({
-        id: organization.id,
-        name: organization.name || "Unnamed organization",
-      })),
-      units: unitsResult.data.map((unit) => {
-        const property = getRelation(unit.properties);
+  const [orgsResult, unitsResult] = await Promise.all([
+    supabase.from("organizations").select("id, name").order("name", { ascending: true }),
+    supabase.from("units").select("id, name, qr_token, property_id, properties(id, name, organization_id)").order("name", { ascending: true }),
+  ]);
 
-        return {
-          id: unit.id,
-          name: unit.name || "Unnamed unit",
-          propertyId: unit.property_id || "",
-          propertyName: property?.name || "Unknown property",
-          organizationId: property?.organization_id || "",
-          qrToken: unit.qr_token || undefined,
-          qrCreatedAt: unit.qr_created_at || null,
-          qrRegeneratedCount: unit.qr_regenerated_count || 0,
-        };
-      }),
-      usingFallback: false,
-    };
-  } catch (error) {
-    console.warn(error);
-    return {
-      organizations: fallbackOrganizations,
-      units: fallbackUnits,
-      usingFallback: true,
-    };
-  }
-}
+  if (orgsResult.error) throw new Error(orgsResult.error.message);
+  if (unitsResult.error) throw new Error(unitsResult.error.message);
 
-export async function getGuestUnitByToken(token: string) {
-  try {
-    const { data } = await supabaseFetch<SupabaseUnitRow[]>(
-      `/units?select=id,name,qr_token,qr_created_at,qr_regenerated_count,property_id,properties(id,name,organization_id)&qr_token=eq.${encodeURIComponent(
-        token,
-      )}&limit=1`,
-    );
-    const unit = data[0];
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    organizations: orgsResult.data.map((org: any) => ({
+      id: org.id,
+      name: org.name || "Unnamed organization",
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    units: unitsResult.data.map((unit: any) => {
+      const property = Array.isArray(unit.properties) ? unit.properties[0] : unit.properties;
 
-    if (!unit) {
-      return { unit: null, usingFallback: false };
-    }
-
-    const property = getRelation(unit.properties);
-
-    return {
-      unit: {
+      return {
         id: unit.id,
         name: unit.name || "Unnamed unit",
         propertyId: unit.property_id || "",
         propertyName: property?.name || "Unknown property",
         organizationId: property?.organization_id || "",
         qrToken: unit.qr_token || undefined,
-        qrCreatedAt: unit.qr_created_at || null,
-        qrRegeneratedCount: unit.qr_regenerated_count || 0,
-      },
-      usingFallback: false,
-    };
-  } catch (error) {
-    console.warn(error);
-    return { unit: null, usingFallback: true };
+        qrCreatedAt: null,
+        qrRegeneratedCount: 0,
+      };
+    }),
+  };
+}
+
+export async function getGuestUnitByToken(token: string) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("units")
+    .select("id, name, qr_token, qr_created_at, qr_regenerated_count, property_id, properties(id, name, organization_id)")
+    .eq("qr_token", token)
+    .single();
+
+  if (error || !data) {
+    return { unit: null };
   }
+
+  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
+
+  return {
+    unit: {
+      id: data.id,
+      name: data.name || "Unnamed unit",
+      propertyId: data.property_id || "",
+      propertyName: property?.name || "Unknown property",
+      organizationId: property?.organization_id || "",
+      qrToken: data.qr_token || undefined,
+      qrCreatedAt: data.qr_created_at || null,
+      qrRegeneratedCount: data.qr_regenerated_count || 0,
+    },
+  };
 }
 
 function generateQrToken() {
   const alphabet = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
   const bytes = crypto.getRandomValues(new Uint8Array(10));
-
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
-function mapUnit(unit: SupabaseUnitRow): GuestUnit {
-  const property = getRelation(unit.properties);
+export async function listQrUnits(): Promise<GuestUnit[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("units")
+    .select("id, name, qr_token, qr_created_at, qr_regenerated_count, property_id, properties(id, name, organization_id)")
+    .order("name", { ascending: true });
 
-  return {
-    id: unit.id,
-    name: unit.name || "Unnamed unit",
-    propertyId: unit.property_id || "",
-    propertyName: property?.name || "Unknown property",
-    organizationId: property?.organization_id || "",
-    qrToken: unit.qr_token || undefined,
-    qrCreatedAt: unit.qr_created_at || null,
-    qrRegeneratedCount: unit.qr_regenerated_count || 0,
-  };
-}
+  if (error) throw new Error(error.message);
 
-export async function listQrUnits() {
-  const { data } = await supabaseFetch<SupabaseUnitRow[]>(
-    "/units?select=id,name,qr_token,qr_created_at,qr_regenerated_count,property_id,properties(id,name,organization_id)&order=name.asc",
-  );
-
-  return data.map(mapUnit);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return data.map((unit: any) => {
+    const property = Array.isArray(unit.properties) ? unit.properties[0] : unit.properties;
+    return {
+      id: unit.id,
+      name: unit.name || "Unnamed unit",
+      propertyId: unit.property_id || "",
+      propertyName: property?.name || "Unknown property",
+      organizationId: property?.organization_id || "",
+      qrToken: unit.qr_token || undefined,
+      qrCreatedAt: unit.qr_created_at || null,
+      qrRegeneratedCount: unit.qr_regenerated_count || 0,
+    };
+  });
 }
 
 export async function generateMissingQrCodes() {
   const units = await listQrUnits();
   const missingUnits = units.filter((unit) => !unit.qrToken);
+  const supabase = await createClient();
 
   await Promise.all(
     missingUnits.map((unit) =>
-      supabaseFetch<SupabaseUnitRow[]>(
-        `/units?id=eq.${encodeURIComponent(unit.id)}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            qr_token: generateQrToken(),
-            qr_created_at: new Date().toISOString(),
-            qr_regenerated_count: unit.qrRegeneratedCount || 0,
-          }),
-        },
-      ),
-    ),
+      supabase
+        .from("units")
+        .update({
+          qr_token: generateQrToken(),
+          qr_created_at: new Date().toISOString(),
+          qr_regenerated_count: unit.qrRegeneratedCount || 0,
+        })
+        .eq("id", unit.id)
+    )
   );
 
   return listQrUnits();
@@ -280,45 +140,67 @@ export async function regenerateUnitQrCode(unitId: string) {
     throw new Error("Unit not found.");
   }
 
-  const { data } = await supabaseFetch<SupabaseUnitRow[]>(
-    `/units?id=eq.${encodeURIComponent(unitId)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({
-        qr_token: generateQrToken(),
-        qr_created_at: new Date().toISOString(),
-        qr_regenerated_count: (unit.qrRegeneratedCount || 0) + 1,
-      }),
-    },
-  );
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("units")
+    .update({
+      qr_token: generateQrToken(),
+      qr_created_at: new Date().toISOString(),
+      qr_regenerated_count: (unit.qrRegeneratedCount || 0) + 1,
+    })
+    .eq("id", unitId)
+    .select("id, name, qr_token, qr_created_at, qr_regenerated_count, property_id, properties(id, name, organization_id)")
+    .single();
 
-  return data[0] ? mapUnit(data[0]) : null;
+  if (error) throw new Error(error.message);
+
+  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
+
+  return {
+    id: data.id,
+    name: data.name || "Unnamed unit",
+    propertyId: data.property_id || "",
+    propertyName: property?.name || "Unknown property",
+    organizationId: property?.organization_id || "",
+    qrToken: data.qr_token || undefined,
+    qrCreatedAt: data.qr_created_at || null,
+    qrRegeneratedCount: data.qr_regenerated_count || 0,
+  };
 }
 
-export async function listGuestRequests() {
-  try {
-    const { data } = await supabaseFetch<SupabaseRequestRow[]>(
-      "/requests?select=id,organization_id,property_id,unit_id,category,status,created_at,properties(id,name),units(id,name)&order=created_at.desc",
-    );
+export async function listGuestRequests(unitId?: string) {
+  const supabase = await createClient();
+  let query = supabase
+    .from("requests")
+    .select("id, organization_id, property_id, unit_id, category, status, created_at, properties(id, name), units(id, name)")
+    .order("created_at", { ascending: false });
 
-    return {
-      requests: data.map(mapRequest),
-      usingFallback: false,
-    };
-  } catch (error) {
-    console.warn(error);
-    return { requests: fallbackGuestRequests, usingFallback: true };
+  if (unitId) {
+    query = query.eq("unit_id", unitId);
   }
-}
 
-async function getGuestRequest(id: string) {
-  const { data } = await supabaseFetch<SupabaseRequestRow[]>(
-    `/requests?select=id,organization_id,property_id,unit_id,category,status,created_at,properties(id,name),units(id,name)&id=eq.${encodeURIComponent(
-      id,
-    )}&limit=1`,
-  );
+  const { data, error } = await query;
 
-  return data[0] ? mapRequest(data[0]) : null;
+  if (error) throw new Error(error.message);
+
+  return {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    requests: data.map((row: any) => {
+      const property = Array.isArray(row.properties) ? row.properties[0] : row.properties;
+      const unit = Array.isArray(row.units) ? row.units[0] : row.units;
+
+      return {
+        id: row.id,
+        propertyId: row.property_id || "",
+        property: property?.name || "Unknown property",
+        unitId: row.unit_id || "",
+        room: unit?.name || "Unassigned unit",
+        type: row.category as GuestRequestType,
+        status: row.status as GuestRequestStatus,
+        createdAt: row.created_at,
+      };
+    }),
+  };
 }
 
 export async function createGuestRequest(input: {
@@ -327,9 +209,10 @@ export async function createGuestRequest(input: {
   unitId: string;
   type: GuestRequestType;
 }) {
-  const { data } = await supabaseFetch<SupabaseRequestRow[]>("/requests", {
-    method: "POST",
-    body: JSON.stringify({
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("requests")
+    .insert({
       organization_id: input.organizationId,
       property_id: input.propertyId,
       unit_id: input.unitId,
@@ -338,29 +221,52 @@ export async function createGuestRequest(input: {
       priority: "normal",
       guest_name: "Guest",
       guest_message: requestMessageByType[input.type],
-    }),
-  });
+    })
+    .select("id, organization_id, property_id, unit_id, category, status, created_at, properties(id, name), units(id, name)")
+    .single();
 
-  const createdId = data[0]?.id;
+  if (error) throw new Error(error.message);
 
-  if (!createdId) {
-    throw new Error("Supabase did not return the created request.");
-  }
+  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
+  const unit = Array.isArray(data.units) ? data.units[0] : data.units;
 
-  return (await getGuestRequest(createdId)) || mapRequest(data[0]);
+  return {
+    id: data.id,
+    propertyId: data.property_id || "",
+    property: property?.name || "Unknown property",
+    unitId: data.unit_id || "",
+    room: unit?.name || "Unassigned unit",
+    type: data.category as GuestRequestType,
+    status: data.status as GuestRequestStatus,
+    createdAt: data.created_at,
+  };
 }
 
 export async function updateGuestRequestStatus(
   id: string,
   status: GuestRequestStatus,
 ) {
-  const { data } = await supabaseFetch<SupabaseRequestRow[]>(
-    `/requests?id=eq.${encodeURIComponent(id)}`,
-    {
-      method: "PATCH",
-      body: JSON.stringify({ status }),
-    },
-  );
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("requests")
+    .update({ status })
+    .eq("id", id)
+    .select("id, organization_id, property_id, unit_id, category, status, created_at, properties(id, name), units(id, name)")
+    .single();
 
-  return (await getGuestRequest(id)) || mapRequest(data[0]);
+  if (error) throw new Error(error.message);
+
+  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
+  const unit = Array.isArray(data.units) ? data.units[0] : data.units;
+
+  return {
+    id: data.id,
+    propertyId: data.property_id || "",
+    property: property?.name || "Unknown property",
+    unitId: data.unit_id || "",
+    room: unit?.name || "Unassigned unit",
+    type: data.category as GuestRequestType,
+    status: data.status as GuestRequestStatus,
+    createdAt: data.created_at,
+  };
 }
