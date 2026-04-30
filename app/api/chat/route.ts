@@ -50,23 +50,19 @@ export async function POST(req: Request) {
         // 1. Single Embedding Generation (1536 dims)
         const queryEmbedding = await generateQueryEmbedding(userMessageContent);
 
-        // 2. Parallel Retrieval (Memory + RAG)
+        // 2. Parallel Retrieval (RAG only - history is handled by 'messages' array)
         console.log(`[RAG DEBUG] Querying knowledge for property: ${propertyId}`);
-        const [memoryChunks, ragChunks] = await Promise.all([
-          getMemory(queryEmbedding, propertyId, activeSession),
-          getKnowledge(queryEmbedding, propertyId)
-        ]);
+        const ragChunks = await getKnowledge(queryEmbedding, propertyId);
 
-        console.log(`[RAG DEBUG] Memory: ${memoryChunks.length}, RAG: ${ragChunks.length}`);
-
+        console.log(`[RAG DEBUG] RAG chunks found: ${ragChunks.length}`);
 
         const combinedChunks = [
-          ...memoryChunks.map((m: any) => m.content),
           ...ragChunks.map((c: any) => {
             if (c.source_file) sourcesUsed.push(c.source_file);
             return c.content;
           })
         ];
+
 
         // 3. Re-ranking (Conditional & Deduplicated)
         const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
@@ -122,7 +118,8 @@ ${knowledgeContext}
 
     // 5. LLM Streaming
     const result = await streamText({
-      model: openrouter("google/gemini-2.0-flash-001"),
+      model: openrouter("google/gemini-2.0-flash"),
+
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
