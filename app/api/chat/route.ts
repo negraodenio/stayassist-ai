@@ -149,7 +149,6 @@ ${knowledgeContext}
     };
 
     // 6. Return Data Stream (Standard)
-    const res = result as any;
     if (typeof res.toDataStreamResponse === 'function') {
       return res.toDataStreamResponse({ headers: customHeaders });
     }
