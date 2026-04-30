@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { setupHotelAndUnits, addKnowledgeSnippet, uploadKnowledgeFile } from "@/app/dashboard/actions";
+import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
 
 const navigationItems = [
@@ -121,24 +122,43 @@ export function DashboardShell({
           </div>
 
           <nav className="space-y-2">
-            {navigationItems.map((item, index) => (
-              <a
-                key={item.id}
-                href={item.href}
-                className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-white/70 ${
-                  index === 0 ? "bg-white text-navy luxury-ring" : "text-muted"
-                }`}
-              >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em] text-accent-strong">
-                  {item.short}
-                </span>
-                <div>
-                  <p className="font-semibold">{item.label}</p>
-                  <p className="text-xs uppercase tracking-[0.24em] opacity-70">Module</p>
-                </div>
-              </a>
-            ))}
+            {navigationItems.map((item) => {
+              const isActive = typeof window !== "undefined" && window.location.hash === item.href.split("#")[1] || (item.id === "overview" && (typeof window !== "undefined" && !window.location.hash));
+              
+              return (
+                <a
+                  key={item.id}
+                  href={item.href}
+                  className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-white/70 ${
+                    isActive ? "bg-white text-navy luxury-ring" : "text-muted"
+                  }`}
+                >
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em] text-accent-strong">
+                    {item.short}
+                  </span>
+                  <div>
+                    <p className="font-semibold">{item.label}</p>
+                    <p className="text-xs uppercase tracking-[0.24em] opacity-70">Module</p>
+                  </div>
+                </a>
+              );
+            })}
           </nav>
+
+          <div className="mt-auto pt-8">
+            <button
+              onClick={() => signOut()}
+              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-muted transition hover:bg-red-50 hover:text-red-600"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em]">
+                LO
+              </span>
+              <div>
+                <p className="font-semibold text-left">Logout</p>
+                <p className="text-xs uppercase tracking-[0.24em] opacity-70">Exit Session</p>
+              </div>
+            </button>
+          </div>
         </aside>
 
         <main className="glass-panel flex-1 rounded-[30px] p-5 sm:p-7 lg:p-8">
