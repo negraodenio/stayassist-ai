@@ -52,13 +52,20 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
 
       if (!response.ok) throw new Error("Network response was not ok");
 
+      // Lê os headers customizados que acabamos de implementar no backend
+      const debugHeader = response.headers.get("X-Debug-Info");
+      if (debugHeader) {
+          try {
+              setDebugInfo(JSON.parse(debugHeader));
+          } catch(e) {}
+      }
+
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let done = false;
       let assistantContent = "";
 
       const assistantMsgId = (Date.now() + 1).toString();
-
       setMessages((prev) => [...prev, { id: assistantMsgId, role: "assistant", content: "" }]);
 
       while (reader && !done) {
@@ -67,7 +74,6 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
           
-          // Auto-detect Vercel Data Stream protocol vs Raw Text
           let isDataStream = false;
           const lines = chunk.split("\n");
           
@@ -75,20 +81,12 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
              if (line.startsWith("0:")) {
                  isDataStream = true;
                  try { assistantContent += JSON.parse(line.substring(2)); } catch(e) {}
-             } else if (line.startsWith("2:")) {
-                 isDataStream = true;
-                 try {
-                     const dataArr = JSON.parse(line.substring(2));
-                     if (dataArr.length > 0 && dataArr[0].debug) {
-                         setDebugInfo(dataArr[0]);
-                     }
-                 } catch(e) {}
-             } else if (line.startsWith("d:")) { // Outros prefixos da Vercel
+             } else if (line.startsWith("d:") || line.startsWith("2:")) {
                  isDataStream = true;
              }
           });
 
-          // Se nenhuma linha tem o prefixo da Vercel, significa que é Raw Text
+          // Se não for o protocolo da Vercel (fallback), apenas concatena o texto bruto
           if (!isDataStream) {
               assistantContent += chunk;
           }

@@ -137,17 +137,18 @@ ${knowledgeContext}
     // Use a dynamic check for the response method to handle version variations (Vercel SDK TS bug)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = result as any;
-    const streamDataPayload = {
-      data: userType === "admin" 
-        ? { debug: debugInfo, sources: sourcesUsed } 
-        : { isRAG: sourcesUsed.length > 0 } // Safe flag for guests
+    
+    const customHeaders = {
+      "X-Debug-Info": JSON.stringify(debugInfo),
+      "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
+      "X-Sources": JSON.stringify(sourcesUsed)
     };
 
     if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse(streamDataPayload);
+      return res.toDataStreamResponse({ headers: customHeaders });
     }
     if (typeof res.toTextStreamResponse === 'function') {
-      return res.toTextStreamResponse();
+      return res.toTextStreamResponse({ headers: customHeaders });
     }
     
     // Fallback absoluto
