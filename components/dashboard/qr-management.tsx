@@ -85,27 +85,19 @@ export function QrManagement() {
     }
   }
 
-  async function regenerate(unit: GuestUnit) {
-    const confirmed = window.confirm(
-      `Regenerate QR for ${unit.propertyName} - ${unit.name}?\n\nThe currently printed QR code will stop working.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+  async function generateIndividual(unitId: string) {
     setState("saving");
     setNotice(null);
 
     try {
-      const response = await fetch(`/api/qr/units/${unit.id}`, { method: "PATCH" });
+      const response = await fetch(`/api/qr/units/${unitId}`, { method: "PATCH" });
       const payload = (await response.json().catch(() => ({}))) as {
         unit?: GuestUnit;
         message?: string;
       };
 
       if (!response.ok || !payload.unit) {
-        throw new Error(payload.message || "Unable to regenerate QR code.");
+        throw new Error(payload.message || "Unable to generate QR code.");
       }
 
       setUnits((current) =>
@@ -115,10 +107,22 @@ export function QrManagement() {
       setState("idle");
     } catch (error) {
       setNotice(
-        error instanceof Error ? error.message : "Unable to regenerate QR code.",
+        error instanceof Error ? error.message : "Unable to generate QR code.",
       );
       setState("error");
     }
+  }
+
+  async function regenerate(unit: GuestUnit) {
+    const confirmed = window.confirm(
+      `Regenerate QR for ${unit.propertyName} - ${unit.name}?\n\nThe currently printed QR code will stop working.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    await generateIndividual(unit.id);
   }
 
   async function copyUrl(token: string) {
@@ -264,20 +268,31 @@ export function QrManagement() {
                         Copy URL
                       </button>
                       {unit.qrToken ? (
-                        <a
-                          href={`/api/qr/png?value=${encodeURIComponent(guestUrl)}`}
-                          className="rounded-full bg-navy px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+                        <>
+                          <a
+                            href={`/api/qr/png?value=${encodeURIComponent(guestUrl)}`}
+                            className="rounded-full bg-navy px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+                          >
+                            Download PNG
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => regenerate(unit)}
+                            className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-muted transition hover:border-accent hover:text-navy"
+                          >
+                            Regenerate
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => generateIndividual(unit.id)}
+                          disabled={state === "saving"}
+                          className="rounded-full bg-accent-strong px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent disabled:opacity-50"
                         >
-                          Download PNG
-                        </a>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => regenerate(unit)}
-                        className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-accent-strong transition hover:border-accent"
-                      >
-                        Regenerate
-                      </button>
+                          {state === "saving" ? "Generating..." : "Generate QR"}
+                        </button>
+                      )}
                     </div>
                   </article>
                 );
