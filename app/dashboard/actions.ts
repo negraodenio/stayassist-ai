@@ -47,11 +47,13 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
     .from("properties")
     .insert({ 
       name: hotelName, 
+      slug: slug, // Added slug to properties too
       organization_id: org.id,
       user_id: user.id 
     })
     .select()
     .single();
+
 
   if (propError) {
     return { error: `Failed to create property: ${propError.message}` };
