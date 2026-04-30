@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { setupHotelAndUnits } from "@/app/dashboard/actions";
+import { setupHotelAndUnits, addKnowledgeSnippet } from "@/app/dashboard/actions";
 import { formatDistanceToNow } from "date-fns";
 
 const navigationItems = [
@@ -9,6 +9,7 @@ const navigationItems = [
   { id: "requests", label: "Requests", short: "RQ", href: "/dashboard/requests" },
   { id: "qr", label: "QR Codes", short: "QR", href: "/dashboard/qr" },
   { id: "properties", label: "Properties", short: "PR", href: "/dashboard#properties" },
+  { id: "knowledge", label: "Knowledge Base", short: "KB", href: "/dashboard#knowledge" },
 ];
 
 function SectionHeading({
@@ -47,17 +48,32 @@ interface DashboardRequest {
   createdAt: string;
 }
 
+interface DashboardKnowledge {
+  id: string;
+  property_id: string;
+  topic: string;
+  content: string;
+  created_at: string;
+}
+
 export function DashboardShell({
   properties,
   unitsCount,
   recentRequests,
+  knowledge,
 }: {
   properties: DashboardProperty[];
   unitsCount: number;
   recentRequests: DashboardRequest[];
+  knowledge: DashboardKnowledge[];
 }) {
   const [setupState, setupAction, isSetupPending] = useActionState(
     setupHotelAndUnits,
+    null
+  );
+
+  const [addKnowledgeState, addKnowledgeAction, isAddKnowledgePending] = useActionState(
+    addKnowledgeSnippet,
     null
   );
 
@@ -278,6 +294,76 @@ export function DashboardShell({
                       </div>
                     </article>
                   ))}
+                </div>
+              </section>
+
+              <section id="knowledge" className="pt-10">
+                <SectionHeading
+                  eyebrow="AI Concierge"
+                  title="Knowledge Base"
+                  description="Add rules, hours, and information that the AI Concierge will use to answer guest questions."
+                />
+                <div className="mt-6 grid gap-6 xl:grid-cols-2">
+                  <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
+                    <h3 className="text-lg font-semibold text-navy mb-4">Add Information</h3>
+                    <form action={addKnowledgeAction} className="flex flex-col gap-4">
+                      <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-navy">Topic</label>
+                        <input
+                          name="topic"
+                          type="text"
+                          required
+                          placeholder="e.g. Breakfast Hours"
+                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-navy">Content</label>
+                        <textarea
+                          name="content"
+                          required
+                          rows={4}
+                          placeholder="e.g. Breakfast is served from 07:00 to 10:30 at the main restaurant."
+                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent resize-none"
+                        ></textarea>
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={isAddKnowledgePending}
+                        className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50"
+                      >
+                        {isAddKnowledgePending ? "Saving..." : "Save Information"}
+                      </button>
+                    </form>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                    <h3 className="text-lg font-semibold text-navy mb-2">Saved Information</h3>
+                    {knowledge.length === 0 ? (
+                      <div className="rounded-[24px] border border-dashed border-border bg-white/50 p-8 text-center text-muted">
+                        No knowledge added yet. The AI will only use general knowledge.
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {knowledge.map((item) => (
+                          <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
+                            <h4 className="font-semibold text-navy">{item.topic}</h4>
+                            <p className="mt-1 text-sm text-muted">{item.content}</p>
+                            <button
+                              onClick={async () => {
+                                const m = await import("@/app/dashboard/actions");
+                                await m.deleteKnowledgeSnippet(item.id);
+                              }}
+                              className="mt-3 text-xs font-semibold text-red-600 hover:text-red-800"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
             </>

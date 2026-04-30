@@ -5,7 +5,7 @@ export default async function DashboardPage() {
   const supabase = await createClient();
 
   // Fetch dashboard metrics
-  const [propertiesRes, unitsRes, requestsRes] = await Promise.all([
+  const [propertiesRes, unitsRes, requestsRes, knowledgeRes] = await Promise.all([
     supabase
       .from("properties")
       .select("id, name, organization_id")
@@ -18,10 +18,15 @@ export default async function DashboardPage() {
       )
       .order("created_at", { ascending: false })
       .limit(4),
+    supabase
+      .from("property_knowledge")
+      .select("id, property_id, topic, content, created_at")
+      .order("created_at", { ascending: false }),
   ]);
 
   const properties = propertiesRes.data || [];
   const unitsCount = unitsRes.count || 0;
+  const knowledge = knowledgeRes.data || [];
   
   // Format requests safely
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +49,7 @@ export default async function DashboardPage() {
       properties={properties}
       unitsCount={unitsCount}
       recentRequests={recentRequests}
+      knowledge={knowledge}
     />
   );
 }

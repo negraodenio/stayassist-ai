@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useChat } from "@ai-sdk/react";
+import { Send, Bot, User } from "lucide-react";
 import {
   formatRequestTime,
   requestTypeDescriptions,
@@ -95,6 +97,19 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         .slice(0, 4),
     [requests, unit?.id],
   );
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+    api: "/api/chat",
+    body: {
+      propertyId: unit?.propertyId,
+      unitName: unit?.name,
+    },
+  } as any) as any;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function refreshRequests() {
     if (!unit) return;
@@ -263,6 +278,64 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                   No requests yet for this stay.
                 </p>
               )}
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col h-[500px] rounded-[26px] border border-border bg-white/75 overflow-hidden">
+            <div className="p-5 border-b border-border bg-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
+                AI Concierge
+              </p>
+              <h3 className="mt-2 font-display text-2xl text-navy">Ask me anything</h3>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-muted text-sm mt-10">
+                  <Bot className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                  <p>Hello! I am your AI Concierge. How can I make your stay perfect today?</p>
+                </div>
+              ) : (
+                messages.map((m: any) => (
+                  <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                    <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${m.role === 'user' ? 'bg-navy text-white' : 'bg-accent-strong text-white'}`}>
+                      {m.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+                    </div>
+                    <div className={`p-3 rounded-2xl max-w-[80%] text-sm ${m.role === 'user' ? 'bg-navy text-white rounded-tr-none' : 'bg-white border border-border text-navy rounded-tl-none'}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))
+              )}
+              {isLoading && (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center bg-accent-strong text-white">
+                    <Bot size={16} />
+                  </div>
+                  <div className="p-3 rounded-2xl bg-white border border-border text-navy rounded-tl-none text-sm animate-pulse">
+                    Thinking...
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <div className="p-4 bg-white border-t border-border">
+              <form onSubmit={handleSubmit} className="flex gap-2 relative">
+                <input
+                  value={input}
+                  onChange={handleInputChange}
+                  placeholder="Ask for recommendations, hotel rules, or help..."
+                  className="w-full rounded-full border border-border bg-stone-50 pl-5 pr-12 py-3 text-sm outline-none transition focus:border-accent"
+                />
+                <button 
+                  type="submit" 
+                  disabled={isLoading || !input.trim() || !unit}
+                  className="absolute right-2 top-1.5 bottom-1.5 aspect-square rounded-full bg-navy text-white flex items-center justify-center transition hover:bg-[#1c4755] disabled:opacity-50"
+                >
+                  <Send size={16} />
+                </button>
+              </form>
             </div>
           </div>
         </section>

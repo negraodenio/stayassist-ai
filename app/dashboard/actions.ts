@@ -56,3 +56,45 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
   revalidatePath("/dashboard", "layout");
   return { success: true };
 }
+
+import { createClient } from "@/utils/supabase/server";
+
+export async function addKnowledgeSnippet(prevState: unknown, formData: FormData) {
+  const propertyId = formData.get("propertyId") as string;
+  const topic = formData.get("topic") as string;
+  const content = formData.get("content") as string;
+
+  if (!propertyId || !topic || !content) {
+    return { error: "Please provide topic and content." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("property_knowledge")
+    .insert({
+      property_id: propertyId,
+      topic,
+      content,
+    });
+
+  if (error) {
+    return { error: `Failed to add knowledge: ${error.message}` };
+  }
+
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
+}
+
+export async function deleteKnowledgeSnippet(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("property_knowledge")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(`Failed to delete knowledge: ${error.message}`);
+  }
+
+  revalidatePath("/dashboard", "layout");
+}
