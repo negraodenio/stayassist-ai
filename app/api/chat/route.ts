@@ -111,24 +111,14 @@ ${knowledgeContext}
       model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
-      onFinish: async ({ text }) => {
-        // 6. Save Memory Asynchronously (Both User Query and AI Response)
+      onFinish: ({ text }) => {
+        // 6. Save Memory — fire-and-forget (never blocks the stream)
         if (userMessageContent) {
-          await saveMemory({
-            propertyId,
-            sessionId: activeSession,
-            userType,
-            role: "user",
-            content: userMessageContent
-          });
+          saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
+            .catch(e => console.error("Memory save error (user):", e));
         }
-        await saveMemory({
-          propertyId,
-          sessionId: activeSession,
-          userType,
-          role: "assistant",
-          content: text
-        });
+        saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
+          .catch(e => console.error("Memory save error (assistant):", e));
       }
     });
 
