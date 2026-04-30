@@ -19,11 +19,20 @@ const openrouter = createOpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { messages, propertyId, unitName, sessionId, isGuest } = await req.json();
+    const { messages: rawMessages, propertyId: rawPropertyId, unitName, sessionId, isGuest } = await req.json();
+    const propertyId = rawPropertyId?.trim();
 
     if (!propertyId) {
+      console.error("Chat Error: Missing propertyId");
       return new Response("Missing propertyId", { status: 400 });
     }
+
+    // Clean messages for the LLM (only role and content)
+    const messages = rawMessages.map((m: any) => ({
+      role: m.role,
+      content: m.content
+    })).filter((m: any) => m.role === "user" || m.role === "assistant");
+
 
     const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
     const userMessageContent = lastUserMessage?.content || "";
@@ -42,10 +51,14 @@ export async function POST(req: Request) {
         const queryEmbedding = await generateQueryEmbedding(userMessageContent);
 
         // 2. Parallel Retrieval (Memory + RAG)
+        console.log(`[RAG DEBUG] Querying knowledge for property: ${propertyId}`);
         const [memoryChunks, ragChunks] = await Promise.all([
           getMemory(queryEmbedding, propertyId, activeSession),
           getKnowledge(queryEmbedding, propertyId)
         ]);
+
+        console.log(`[RAG DEBUG] Memory: ${memoryChunks.length}, RAG: ${ragChunks.length}`);
+
 
         const combinedChunks = [
           ...memoryChunks.map((m: any) => m.content),
