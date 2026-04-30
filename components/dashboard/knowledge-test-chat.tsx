@@ -1,46 +1,94 @@
 "use client";
 
 import { useRef, useEffect, useState } from "react";
-import { useChat } from "@ai-sdk/react";
 import { Send, Bot, User, MessageSquare } from "lucide-react";
 
-interface SeniorChatBridge {
-  messages: any[];
-  append: (message: { role: "user" | "assistant"; content: string }) => void;
-  isLoading: boolean;
+interface LocalMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
 }
 
 export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
-  // Local state to guarantee input tracking
+  // 100% Controlled Native State (No Vercel SDK Bugs)
   const [localInput, setLocalInput] = useState("");
-
-  const { 
-    messages, 
-    append, 
-    isLoading 
-  } = useChat({
-    api: "/api/chat",
-    body: {
-      propertyId,
-      unitName: "Admin Test",
-    },
-  } as any) as unknown as SeniorChatBridge;
+  const [messages, setMessages] = useState<LocalMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!localInput.trim() || isLoading) return;
-    
-    append({ role: "user", content: localInput });
-    setLocalInput(""); // Clear input after sending
-  };
-
+  // Auto-scroll
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const textToSend = localInput.trim();
+    
+    // Hard block against empty submissions or double-clicks
+    if (!textToSend || isLoading) return;
+    
+    // Add user message to UI immediately
+    const userMsg: LocalMessage = { id: Date.now().toString(), role: "user", content: textToSend };
+    const newMessages = [...messages, userMsg];
+    
+    setMessages(newMessages);
+    setLocalInput(""); // Clear input box instantly
+    setIsLoading(true);
+
+    try {
+      // Native fetch bypassing all Vercel SDK hooks
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newMessages,
+          propertyId,
+          unitName: "Admin Test",
+        }),
+      });
+
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      // Handle streaming response natively
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let assistantContent = "";
+
+      const assistantMsgId = (Date.now() + 1).toString();
+
+      // Add empty assistant message to UI
+      setMessages((prev) => [...prev, { id: assistantMsgId, role: "assistant", content: "" }]);
+
+      while (reader && !done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value);
+          // Vercel AI SDK streams chunks prefixed with "0:" (DataStream protocol)
+          const cleanChunk = chunk.split("\n").map(line => {
+             if (line.startsWith("0:")) return JSON.parse(line.substring(2));
+             return "";
+          }).join("");
+
+          assistantContent += cleanChunk;
+          
+          setMessages((prev) => 
+            prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Chat Error:", error);
+      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Error connecting to AI. Please check your console." }]);
+    } finally {
+      setIsLoading(false); // ALWAYS release the loading lock
+    }
+  };
 
   return (
     <div className="flex flex-col h-[600px] rounded-[24px] border border-border bg-white overflow-hidden shadow-sm">
@@ -61,7 +109,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
             <p className="text-sm max-w-[200px]">Type a question to test if your uploaded manual is working.</p>
           </div>
         ) : (
-          messages.map((m: any) => (
+          messages.map((m) => (
             <div key={m.id} className={`flex gap-3 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
               <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${m.role === "user" ? "bg-navy text-white" : "bg-accent-strong text-white"}`}>
                 {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
@@ -94,7 +142,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
           />
           <button
             type="submit"
-            disabled={isLoading || !localInput.trim()}
+            disabled={isLoading || localInput.trim() === ""}
             className="absolute right-1.5 top-1.5 h-8 w-8 rounded-full bg-navy text-white flex items-center justify-center transition hover:bg-[#1c4755] disabled:opacity-40"
           >
             <Send size={14} />
