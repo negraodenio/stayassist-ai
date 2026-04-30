@@ -205,7 +205,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                 {notice}
               </div>
             )}
-          </article>
+          </section>
 
           <section className="glass-panel rounded-[32px] p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-strong">
