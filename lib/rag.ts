@@ -6,7 +6,7 @@ export async function getKnowledge(embedding: number[], propertyId: string) {
     
     const { data } = await supabase.rpc("match_property_knowledge", {
       query_embedding: embedding,
-      match_threshold: 0.5,
+      match_threshold: 0.1, // Reduzido drasticamente para provar que a busca está acontecendo
       match_count: 5,
       p_property_id: propertyId,
     });
