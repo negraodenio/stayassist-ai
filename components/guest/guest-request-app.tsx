@@ -2,18 +2,13 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useChat } from "@ai-sdk/react";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, Smartphone } from "lucide-react";
 import {
-  formatRequestTime,
-  requestTypeDescriptions,
-  requestTypeIntents,
-  requestTypeLabels,
   type GuestRequest,
   type GuestRequestType,
   type GuestUnit,
 } from "@/lib/guest-requests";
-
-const requestTypes = ["towels", "cleaning", "issue", "help"] as const;
+import { translations, type SupportedLanguage } from "@/lib/translations";
 
 type RequestState = "idle" | "loading" | "saving" | "error";
 
@@ -28,6 +23,17 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   const [state, setState] = useState<RequestState>("loading");
   const [pendingType, setPendingType] = useState<GuestRequestType | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [lang, setLang] = useState<SupportedLanguage>("en");
+
+  const t = translations[lang];
+
+  useEffect(() => {
+    // Detect language
+    const browserLang = navigator.language.split("-")[0] as SupportedLanguage;
+    if (translations[browserLang]) {
+      setLang(browserLang);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -75,29 +81,15 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         }
         setState("idle");
       } catch (error) {
-        if (!active) {
-          return;
-        }
-
+        if (!active) return;
         setNotice(error instanceof Error ? error.message : "Unable to load data.");
         setState("error");
       }
     }
 
     loadGuestData();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [token]);
-
-  const guestRequests = useMemo(
-    () =>
-      requests
-        .filter((request) => request.unitId === unit?.id)
-        .slice(0, 4),
-    [requests, unit?.id],
-  );
 
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
@@ -107,6 +99,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any) as any;
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,22 +109,13 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   async function refreshRequests() {
     if (!unit) return;
     const response = await fetch(`/api/requests?unitId=${unit.id}`);
-
-    if (!response.ok) {
-      throw new Error("Unable to refresh requests.");
-    }
-
-    const payload = (await response.json()) as {
-      requests: GuestRequest[];
-    };
-
+    if (!response.ok) return;
+    const payload = (await response.json()) as { requests: GuestRequest[]; };
     setRequests(payload.requests);
   }
 
   async function handleCreateRequest(type: GuestRequestType) {
-    if (!unit) {
-      return;
-    }
+    if (!unit) return;
 
     setState("saving");
     setPendingType(type);
@@ -150,14 +134,11 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as {
-          message?: string;
-        };
+        const payload = (await response.json().catch(() => ({}))) as { message?: string; };
         throw new Error(payload.message || "Unable to create request.");
       }
 
       const payload = (await response.json()) as { request: GuestRequest };
-
       setLastCreatedId(payload.request.id);
       await refreshRequests();
       setState("idle");
@@ -169,180 +150,225 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     }
   }
 
-  const lastCreated = requests.find((request) => request.id === lastCreatedId);
-
   return (
     <main className="min-h-screen px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl gap-5 lg:grid-cols-[0.95fr_1.05fr] lg:items-stretch">
-        <section className="glass-panel flex flex-col justify-between rounded-[30px] p-6 sm:p-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-              StayAssist Guest
-            </p>
-            <h1 className="mt-4 font-display text-5xl leading-tight tracking-tight text-navy sm:text-6xl">
-              Welcome back.
-            </h1>
-            <p className="mt-5 max-w-xl text-base leading-8 text-muted">
-              Request hotel services instantly from your private guest workspace.
-            </p>
-          </div>
-
-          <div className="mt-8 rounded-[26px] border border-border bg-white/78 p-5 luxury-ring">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
-              Your stay
-            </p>
-            <h2 className="mt-4 font-display text-4xl tracking-tight text-navy">
-              {unit?.propertyName || "Loading stay"}
-            </h2>
-            <p className="mt-3 text-xl font-semibold text-navy">
-              {unit?.name || "Resolving room"}
-            </p>
-            <p className="mt-4 text-sm leading-7 text-muted">
-              This QR link is assigned to your room, so requests go to the right property team automatically.
-            </p>
-          </div>
-        </section>
-
-        <section className="glass-panel rounded-[30px] p-5 sm:p-7">
-          <div className="flex flex-col gap-3 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-accent-strong">
-                Request cards
-              </p>
-              <h2 className="mt-2 font-display text-4xl text-navy">How can we help?</h2>
-            </div>
-            <div className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white">
-              QR assigned
-            </div>
-          </div>
-
-          {notice ? (
-            <div className="mt-5 rounded-[22px] border border-border bg-white/80 p-4 text-sm text-muted">
-              {notice}
-            </div>
-          ) : null}
-
-          {lastCreated ? (
-            <div className="mt-5 rounded-[22px] border border-success/25 bg-white/80 p-4 text-sm text-navy">
-              <span className="font-semibold text-success">Request created:</span>{" "}
-              {requestTypeLabels[lastCreated.type]} for {lastCreated.room}
-            </div>
-          ) : null}
-
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            {requestTypes.map((type) => (
-              <button
-                key={type}
-                type="button"
-                onClick={() => handleCreateRequest(type)}
-                disabled={state === "saving" || state === "loading" || !unit}
-                className="group min-h-48 rounded-[26px] border border-border bg-white/82 p-5 text-left transition hover:-translate-y-0.5 hover:border-accent hover:bg-white disabled:cursor-not-allowed disabled:opacity-55"
-              >
-                <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-accent-strong">
-                  {requestTypeIntents[type]}
-                </span>
-                <h3 className="mt-5 font-display text-3xl text-navy">
-                  {requestTypeLabels[type]}
-                </h3>
-                <p className="mt-3 text-sm leading-7 text-muted">
-                  {requestTypeDescriptions[type]}
+      <div className="mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl gap-5 lg:grid-cols-[1fr_1.1fr] lg:items-stretch">
+        
+        {/* Left Column: UI and Requests */}
+        <div className="flex flex-col gap-6">
+          <section className="glass-panel rounded-[32px] p-6 sm:p-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
+                  STAYASSIST GUEST
                 </p>
-                <span className="mt-6 inline-flex rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-[#1c4755]">
-                  {pendingType === type ? "Creating..." : "Create request"}
-                </span>
-              </button>
-            ))}
-          </div>
+                <h1 className="mt-4 font-display text-5xl tracking-tight text-navy sm:text-6xl">
+                  {t.welcome}
+                </h1>
+                <p className="mt-5 max-w-md text-sm leading-8 text-muted">
+                  {t.subtitle}
+                </p>
+              </div>
+              
+              <div className="flex flex-wrap gap-1.5 rounded-2xl bg-stone-100/50 p-1.5">
+                {(Object.keys(translations) as SupportedLanguage[]).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-[11px] font-bold uppercase transition ${
+                      lang === l ? "bg-navy text-white shadow-md shadow-navy/20" : "text-muted hover:bg-stone-200"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div className="mt-6 rounded-[26px] border border-border bg-white/75 p-5">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
-              Recent for this stay
+            <article className="mt-10 rounded-[28px] border border-border bg-white/75 p-6 sm:p-8 luxury-ring">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-accent-strong">
+                {t.yourStay}
+              </p>
+              <h2 className="mt-4 font-display text-4xl text-navy sm:text-5xl">
+                {unit?.propertyName || "Loading stay..."}
+              </h2>
+              <p className="mt-2 text-xl font-semibold text-muted">
+                {unit?.name || "..."}
+              </p>
+              <p className="mt-5 text-sm leading-7 text-muted">
+                {t.assignedRoom}
+              </p>
+            </article>
+
+            {notice && (
+              <div className="mt-6 rounded-2xl border border-border bg-white/80 p-4 text-sm text-muted">
+                {notice}
+              </div>
+            )}
+          </article>
+
+          <section className="glass-panel rounded-[32px] p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-strong">
+              {t.requestCards}
             </p>
-            <div className="mt-4 grid gap-3">
-              {guestRequests.length > 0 ? (
-                guestRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="flex flex-col gap-2 rounded-[18px] border border-border bg-surface-strong/80 p-4 sm:flex-row sm:items-center sm:justify-between"
+            <h2 className="mt-3 font-display text-4xl text-navy">
+              {t.howCanWeHelp}
+            </h2>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              {[
+                { id: "towels", label: t.towels, desc: t.towelsDesc },
+                { id: "cleaning", label: t.cleaning, desc: t.cleaningDesc },
+                { id: "issue", label: t.issue, desc: t.issueDesc },
+                { id: "help", label: t.help, desc: t.helpDesc },
+              ].map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => handleCreateRequest(card.id as GuestRequestType)}
+                  disabled={state === "saving" || state === "loading" || !unit}
+                  className="group rounded-[26px] border border-border bg-white/82 p-5 text-left transition hover:-translate-y-0.5 hover:border-accent hover:bg-white disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  <h3 className="font-display text-2xl text-navy">
+                    {card.label}
+                  </h3>
+                  <p className="mt-2 text-xs leading-6 text-muted">
+                    {card.desc}
+                  </p>
+                  <span className="mt-5 inline-flex rounded-full bg-navy px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition group-hover:bg-[#1c4755]">
+                    {pendingType === card.id ? t.creating : t.createRequest}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {requests.length > 0 && (
+            <section className="glass-panel rounded-[32px] p-6 sm:p-8">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-strong">
+                {t.recentRequests}
+              </p>
+              <div className="mt-6 grid gap-3">
+                {requests.map((req) => (
+                  <article
+                    key={req.id}
+                    className={`flex items-center justify-between rounded-[22px] border border-border bg-white/82 p-4 transition ${
+                      req.id === lastCreatedId ? "luxury-ring border-accent" : ""
+                    }`}
                   >
                     <div>
                       <p className="font-semibold text-navy">
-                        {requestTypeLabels[request.type]}
+                        {translations[lang][req.type as keyof typeof translations[SupportedLanguage]] || req.type}
                       </p>
-                      <p className="mt-1 text-sm text-muted">
-                        {formatRequestTime(request.createdAt)}
+                      <p className="text-[10px] uppercase tracking-wider text-muted mt-1">
+                        {new Date(req.createdAt).toLocaleString(lang, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </p>
                     </div>
-                    <span className="rounded-full bg-stone-100 px-3 py-1 text-sm font-semibold text-accent-strong">
-                      {request.status}
+                    <span
+                      className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                        req.status === "Open"
+                          ? "bg-accent/10 text-accent-strong"
+                          : "bg-success/10 text-success"
+                      }`}
+                    >
+                      {req.status}
                     </span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm leading-7 text-muted">
-                  No requests yet for this stay.
-                </p>
-              )}
-            </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+
+        {/* Right Column: AI Chat */}
+        <section className="glass-panel flex flex-col overflow-hidden rounded-[32px]">
+          <div className="border-b border-border bg-stone-50/50 p-6 sm:p-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-strong">
+              {t.chatTitle}
+            </p>
+            <h2 className="mt-3 font-display text-3xl text-navy">
+              StayAssist AI
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              {t.chatSubtitle}
+            </p>
           </div>
 
-          <div className="mt-6 flex flex-col h-[500px] rounded-[26px] border border-border bg-white/75 overflow-hidden">
-            <div className="p-5 border-b border-border bg-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
-                AI Concierge
-              </p>
-              <h3 className="mt-2 font-display text-2xl text-navy">Ask me anything</h3>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {messages.length === 0 ? (
-                <div className="text-center text-muted text-sm mt-10">
-                  <Bot className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                  <p>Hello! I am your AI Concierge. How can I make your stay perfect today?</p>
-                </div>
-              ) : (
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                messages.map((m: any) => (
-                  <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                    <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${m.role === 'user' ? 'bg-navy text-white' : 'bg-accent-strong text-white'}`}>
-                      {m.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+          <div className="flex flex-1 flex-col bg-white/40 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+              <div className="space-y-6">
+                {messages.length === 0 ? (
+                  <div className="text-center text-muted text-sm mt-20">
+                    <Bot className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                    <p className="max-w-[200px] mx-auto text-muted/60">{t.chatSubtitle}</p>
+                  </div>
+                ) : (
+                  messages.map((m: any) => (
+                    <div
+                      key={m.id}
+                      className={`flex gap-3 ${
+                        m.role === "user" ? "flex-row-reverse" : "flex-row"
+                      }`}
+                    >
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm ${
+                        m.role === "user" ? "bg-navy text-white" : "bg-accent-strong text-white"
+                      }`}>
+                        {m.role === "user" ? <User size={14} /> : <Bot size={14} />}
+                      </div>
+                      <div
+                        className={`max-w-[85%] rounded-[22px] px-5 py-3 text-sm leading-7 shadow-sm ${
+                          m.role === "user"
+                            ? "bg-navy text-white rounded-tr-none"
+                            : "bg-white border border-border text-navy rounded-tl-none"
+                        }`}
+                      >
+                        {m.content}
+                      </div>
                     </div>
-                    <div className={`p-3 rounded-2xl max-w-[80%] text-sm ${m.role === 'user' ? 'bg-navy text-white rounded-tr-none' : 'bg-white border border-border text-navy rounded-tl-none'}`}>
-                      {m.content}
+                  ))
+                )}
+                {isLoading && (
+                  <div className="flex gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-strong text-white shadow-sm">
+                      <Bot size={14} />
+                    </div>
+                    <div className="animate-pulse rounded-[22px] border border-border bg-white px-5 py-3 text-sm text-muted shadow-sm rounded-tl-none">
+                      {t.aiThinking}
                     </div>
                   </div>
-                ))
-              )}
-              {isLoading && (
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 shrink-0 rounded-full flex items-center justify-center bg-accent-strong text-white">
-                    <Bot size={16} />
-                  </div>
-                  <div className="p-3 rounded-2xl bg-white border border-border text-navy rounded-tl-none text-sm animate-pulse">
-                    Thinking...
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+                )}
+                <div ref={messagesEndRef} />
+              </div>
             </div>
 
-            <div className="p-4 bg-white border-t border-border">
-              <form onSubmit={handleSubmit} className="flex gap-2 relative">
+            <form
+              onSubmit={handleSubmit}
+              className="border-t border-border bg-white p-4 sm:p-6"
+            >
+              <div className="relative flex items-center">
                 <input
                   value={input}
                   onChange={handleInputChange}
-                  placeholder="Ask for recommendations, hotel rules, or help..."
-                  className="w-full rounded-full border border-border bg-stone-50 pl-5 pr-12 py-3 text-sm outline-none transition focus:border-accent"
+                  placeholder={t.chatPlaceholder}
+                  className="w-full rounded-full border border-border bg-stone-50 py-4 pl-6 pr-14 text-sm outline-none transition focus:border-accent luxury-ring"
                 />
-                <button 
-                  type="submit" 
-                  disabled={isLoading || !(input || "").trim() || !unit}
-                  className="absolute right-2 top-1.5 bottom-1.5 aspect-square rounded-full bg-navy text-white flex items-center justify-center transition hover:bg-[#1c4755] disabled:opacity-50"
+                <button
+                  type="submit"
+                  disabled={isLoading || !input.trim()}
+                  className="absolute right-2 flex h-10 w-10 items-center justify-center rounded-full bg-navy text-white transition hover:bg-[#1c4755] disabled:opacity-45"
                 >
-                  <Send size={16} />
+                  <Send size={18} />
                 </button>
-              </form>
-            </div>
+              </div>
+              <p className="mt-3 text-center text-[10px] text-muted/60 flex items-center justify-center gap-1">
+                <Smartphone size={10} /> StayAssist AI Concierge • Multilingual 5-Star Support
+              </p>
+            </form>
           </div>
         </section>
       </div>
