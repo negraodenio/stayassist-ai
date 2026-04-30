@@ -65,24 +65,37 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
         if (value) {
-          const chunk = decoder.decode(value);
+          const chunk = decoder.decode(value, { stream: true });
           
-          chunk.split("\n").forEach(line => {
+          // Auto-detect Vercel Data Stream protocol vs Raw Text
+          let isDataStream = false;
+          const lines = chunk.split("\n");
+          
+          lines.forEach(line => {
              if (line.startsWith("0:")) {
-                 assistantContent += JSON.parse(line.substring(2));
-                 setMessages((prev) => 
-                   prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
-                 );
+                 isDataStream = true;
+                 try { assistantContent += JSON.parse(line.substring(2)); } catch(e) {}
              } else if (line.startsWith("2:")) {
-                 // Capture Vercel SDK Data Stream
+                 isDataStream = true;
                  try {
                      const dataArr = JSON.parse(line.substring(2));
                      if (dataArr.length > 0 && dataArr[0].debug) {
                          setDebugInfo(dataArr[0]);
                      }
                  } catch(e) {}
+             } else if (line.startsWith("d:")) { // Outros prefixos da Vercel
+                 isDataStream = true;
              }
           });
+
+          // Se nenhuma linha tem o prefixo da Vercel, significa que é Raw Text
+          if (!isDataStream) {
+              assistantContent += chunk;
+          }
+          
+          setMessages((prev) => 
+            prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
+          );
         }
       }
     } catch (error) {
