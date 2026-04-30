@@ -55,6 +55,7 @@ interface DashboardKnowledge {
   property_id: string;
   topic: string;
   content: string;
+  source_file?: string;
   created_at: string;
 }
 
@@ -69,6 +70,14 @@ export function DashboardShell({
   recentRequests: DashboardRequest[];
   knowledge: DashboardKnowledge[];
 }) {
+  const [selectedPropertyId, setSelectedPropertyId] = (typeof window !== 'undefined') 
+    ? require('react').useState(properties[0]?.id || "")
+    : ["", () => {}];
+
+  const selectedProperty = properties.find(p => p.id === selectedPropertyId) || properties[0];
+
+  const filteredKnowledge = knowledge.filter(k => k.property_id === selectedPropertyId);
+
   const [setupState, setupAction, isSetupPending] = useActionState(
     setupHotelAndUnits,
     null
@@ -324,17 +333,34 @@ export function DashboardShell({
               </section>
 
               <section id="knowledge" className="pt-10">
-                <SectionHeading
-                  eyebrow="AI Concierge"
-                  title="Knowledge Base"
-                  description="Add rules, hours, and information that the AI Concierge will use to answer guest questions."
-                />
+                <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
+                  <SectionHeading
+                    eyebrow="AI Concierge"
+                    title="Knowledge Base"
+                    description="Add rules, hours, and information that the AI Concierge will use to answer guest questions."
+                  />
+                  
+                  <div className="flex flex-col gap-2 min-w-[240px]">
+                    <label className="text-xs font-bold uppercase tracking-wider text-accent-strong">Active Property</label>
+                    <select 
+                      value={selectedPropertyId}
+                      onChange={(e) => setSelectedPropertyId(e.target.value)}
+                      className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-navy luxury-ring outline-none"
+                    >
+                      {properties.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div className="mt-6 grid gap-6 xl:grid-cols-2">
                   <div className="flex flex-col gap-6">
                     <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
-                      <h3 className="text-lg font-semibold text-navy mb-4">Add Information</h3>
+                      <h3 className="text-lg font-semibold text-navy mb-4">Add Information to {selectedProperty?.name}</h3>
                       <form action={addKnowledgeAction} className="flex flex-col gap-4">
-                        <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
+                        <input type="hidden" name="propertyId" value={selectedPropertyId} />
+
                         <div>
                           <label className="mb-2 block text-sm font-semibold text-navy">Topic</label>
                           <input
@@ -367,9 +393,10 @@ export function DashboardShell({
 
                     <div className="rounded-[24px] border border-border bg-stone-50/50 p-6 shadow-sm">
                       <h3 className="text-lg font-semibold text-navy mb-4">Upload Document</h3>
-                      <p className="text-xs text-muted mb-4">Upload a PDF or TXT file to train the AI with multiple pages of rules.</p>
+                      <p className="text-xs text-muted mb-4">Upload a PDF or TXT file to train the AI for {selectedProperty?.name}.</p>
                       <form action={uploadAction} className="flex flex-col gap-4">
-                        <input type="hidden" name="propertyId" value={properties[0]?.id || ""} />
+                        <input type="hidden" name="propertyId" value={selectedPropertyId} />
+
                         <input
                           name="file"
                           type="file"
@@ -392,39 +419,47 @@ export function DashboardShell({
                   </div>
 
                   <div className="flex flex-col gap-4">
-                    {properties[0] && (
-                      <KnowledgeTestChat propertyId={properties[0].id} />
+                    {selectedPropertyId && (
+                      <KnowledgeTestChat propertyId={selectedPropertyId} />
                     )}
                     
-                    <details className="mt-4">
-                      <summary className="text-xs font-semibold text-muted cursor-pointer hover:text-navy transition">
-                        View Raw Knowledge Chunks (Debug)
-                      </summary>
-                      <div className="mt-4 flex flex-col gap-3">
-                        {knowledge.length === 0 ? (
+                    <div className="mt-2">
+                      <h3 className="text-sm font-bold uppercase tracking-widest text-accent-strong mb-4">Existing Knowledge ({filteredKnowledge.length})</h3>
+                      <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                        {filteredKnowledge.length === 0 ? (
                           <div className="rounded-[24px] border border-dashed border-border bg-white/50 p-8 text-center text-muted">
-                            No knowledge added yet.
+                            No knowledge added for this property.
                           </div>
                         ) : (
-                          knowledge.map((item) => (
-                            <div key={item.id} className="rounded-2xl border border-border bg-white/60 p-4 text-xs">
-                              <h4 className="font-semibold text-navy">{item.topic}</h4>
-                              <p className="mt-1 text-muted leading-relaxed line-clamp-3">{item.content}</p>
-                              <button
-                                onClick={async () => {
-                                  const m = await import("@/app/dashboard/actions");
-                                  await m.deleteKnowledgeSnippet(item.id);
-                                }}
-                                className="mt-2 font-semibold text-red-600 hover:text-red-800"
-                              >
-                                Delete
-                              </button>
+                          filteredKnowledge.map((item) => (
+                            <div key={item.id} className="group relative rounded-2xl border border-border bg-white/60 p-4 text-xs transition hover:bg-white hover:shadow-md">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-bold text-navy">{item.topic}</h4>
+                                <button
+                                  onClick={async () => {
+                                    if (confirm("Delete this information?")) {
+                                      const m = await import("@/app/dashboard/actions");
+                                      await m.deleteKnowledgeSnippet(item.id);
+                                      window.location.reload();
+                                    }
+                                  }}
+                                  className="text-red-400 hover:text-red-600 transition"
+                                  title="Delete"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                              </div>
+                              <p className="text-muted leading-relaxed line-clamp-3">{item.content}</p>
+                              {item.source_file && (
+                                <span className="mt-2 block text-[10px] text-accent-strong font-medium">Source: {item.source_file}</span>
+                              )}
                             </div>
                           ))
                         )}
                       </div>
-                    </details>
+                    </div>
                   </div>
+
                 </div>
               </section>
             </>
