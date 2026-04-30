@@ -139,9 +139,11 @@ ${knowledgeContext}
     const res = result as any;
     
     const customHeaders = {
-      "X-Debug-Info": JSON.stringify(debugInfo),
+      "X-Debug-Info": JSON.stringify({
+        debug: debugInfo,      // frontend acessa: debugInfo.debug.memory_used
+        sources: sourcesUsed   // frontend acessa: debugInfo.sources
+      }),
       "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
-      "X-Sources": JSON.stringify(sourcesUsed)
     };
 
     if (typeof res.toDataStreamResponse === 'function') {
