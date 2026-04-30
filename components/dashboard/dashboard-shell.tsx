@@ -72,7 +72,7 @@ export function DashboardShell({
     null
   );
 
-  const [addKnowledgeState, addKnowledgeAction, isAddKnowledgePending] = useActionState(
+  const [_addKnowledgeState, addKnowledgeAction, isAddKnowledgePending] = useActionState(
     addKnowledgeSnippet,
     null
   );

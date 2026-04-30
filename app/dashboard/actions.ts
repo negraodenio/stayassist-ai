@@ -99,9 +99,6 @@ export async function deleteKnowledgeSnippet(id: string) {
   revalidatePath("/dashboard", "layout");
 }
 
-// @ts-ignore
-import pdf from "pdf-parse";
-
 export async function uploadKnowledgeFile(prevState: unknown, formData: FormData) {
   const propertyId = formData.get("propertyId") as string;
   const file = formData.get("file") as File;
@@ -116,6 +113,9 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
     const buffer = Buffer.from(bytes);
 
     if (file.type === "application/pdf") {
+      // Dynamic import to avoid build issues with pdf-parse ESM
+      // @ts-expect-error - pdf-parse has weird ESM types
+      const pdf = (await import("pdf-parse")).default;
       const data = await pdf(buffer);
       text = data.text;
     } else if (file.type === "text/plain") {

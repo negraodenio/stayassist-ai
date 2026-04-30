@@ -104,6 +104,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       propertyId: unit?.propertyId,
       unitName: unit?.name,
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any) as any;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -296,6 +297,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                   <p>Hello! I am your AI Concierge. How can I make your stay perfect today?</p>
                 </div>
               ) : (
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 messages.map((m: any) => (
                   <div key={m.id} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
                     <div className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center ${m.role === 'user' ? 'bg-navy text-white' : 'bg-accent-strong text-white'}`}>

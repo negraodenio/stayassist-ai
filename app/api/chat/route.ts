@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
+import { streamText } from "ai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
 
@@ -46,6 +46,7 @@ If the guest asks for local recommendations (restaurants, places, etc), use the 
 If the answer is in the Hotel Knowledge, provide it accurately and politely. If not, politely state you don't have that specific information and suggest they contact the front desk.`;
 
     // 3. Define Tools
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: any = {
       search_nearby_places: {
         description: "Search for nearby places (restaurants, attractions, etc) using Google Places API.",
@@ -104,6 +105,7 @@ If the answer is in the Hotel Knowledge, provide it accurately and politely. If 
     });
 
     // Use a dynamic check for the response method to handle version variations
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = result as any;
     if (typeof res.toDataStreamResponse === 'function') {
       return res.toDataStreamResponse();
