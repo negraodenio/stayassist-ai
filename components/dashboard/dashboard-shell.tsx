@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { setupHotelAndUnits, addKnowledgeSnippet, uploadKnowledgeFile } from "@/app/dashboard/actions";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
+import { KnowledgeTestChat } from "./knowledge-test-chat";
 
 const navigationItems = [
   { id: "overview", label: "Overview", short: "OV", href: "/dashboard#overview" },
@@ -391,30 +392,38 @@ export function DashboardShell({
                   </div>
 
                   <div className="flex flex-col gap-4">
-                    <h3 className="text-lg font-semibold text-navy mb-2">Saved Information</h3>
-                    {knowledge.length === 0 ? (
-                      <div className="rounded-[24px] border border-dashed border-border bg-white/50 p-8 text-center text-muted">
-                        No knowledge added yet. The AI will only use general knowledge.
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-3">
-                        {knowledge.map((item) => (
-                          <div key={item.id} className="rounded-2xl border border-border bg-white p-4">
-                            <h4 className="font-semibold text-navy">{item.topic}</h4>
-                            <p className="mt-1 text-sm text-muted">{item.content}</p>
-                            <button
-                              onClick={async () => {
-                                const m = await import("@/app/dashboard/actions");
-                                await m.deleteKnowledgeSnippet(item.id);
-                              }}
-                              className="mt-3 text-xs font-semibold text-red-600 hover:text-red-800"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                    {properties[0] && (
+                      <KnowledgeTestChat propertyId={properties[0].id} />
                     )}
+                    
+                    <details className="mt-4">
+                      <summary className="text-xs font-semibold text-muted cursor-pointer hover:text-navy transition">
+                        View Raw Knowledge Chunks (Debug)
+                      </summary>
+                      <div className="mt-4 flex flex-col gap-3">
+                        {knowledge.length === 0 ? (
+                          <div className="rounded-[24px] border border-dashed border-border bg-white/50 p-8 text-center text-muted">
+                            No knowledge added yet.
+                          </div>
+                        ) : (
+                          knowledge.map((item) => (
+                            <div key={item.id} className="rounded-2xl border border-border bg-white/60 p-4 text-xs">
+                              <h4 className="font-semibold text-navy">{item.topic}</h4>
+                              <p className="mt-1 text-muted leading-relaxed line-clamp-3">{item.content}</p>
+                              <button
+                                onClick={async () => {
+                                  const m = await import("@/app/dashboard/actions");
+                                  await m.deleteKnowledgeSnippet(item.id);
+                                }}
+                                className="mt-2 font-semibold text-red-600 hover:text-red-800"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </details>
                   </div>
                 </div>
               </section>
