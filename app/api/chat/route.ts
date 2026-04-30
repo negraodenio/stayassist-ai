@@ -2,6 +2,8 @@ import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import { z } from "zod";
 import { createClient } from "@/utils/supabase/server";
+import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
+import type { GuestRequestType } from "@/lib/guest-requests";
 
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
@@ -75,6 +77,23 @@ export async function POST(req: Request) {
         }
       } catch (err) {
         console.error("RAG Retrieval error:", err);
+      }
+
+      // 4. Notifica o gestor via WhatsApp que há uma nova conversa
+      // Criamos um objeto "mock" de request para reusar o helper de Twilio
+      try {
+        await sendRequestWhatsAppAlert({
+          id: "chat-escalation",
+          propertyId: propertyId,
+          property: "Hotel Concierge Chat",
+          unitId: "chat",
+          room: unitName || "Guest",
+          type: "help" as GuestRequestType,
+          status: "Open",
+          createdAt: new Date().toISOString()
+        });
+      } catch (whatsappErr) {
+        console.error("WhatsApp notification error:", whatsappErr);
       }
     }
 
