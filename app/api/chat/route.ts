@@ -115,10 +115,10 @@ ${knowledgeContext}
     };
 
 
-    // 5. LLM Streaming
-    console.log(`[RAG DEBUG] Starting stream with stable model: google/gemini-2.0-flash-001`);
+    // 5. LLM Streaming with Anthropic Claude 3 Haiku (More stable for mobile streams)
+    console.log(`[RAG DEBUG] Starting stream with ultra-stable model: anthropic/claude-3-haiku`);
     const result = await streamText({
-      model: openrouter("google/gemini-2.0-flash-001"),
+      model: openrouter("anthropic/claude-3-haiku"),
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
