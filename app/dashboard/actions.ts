@@ -1,7 +1,8 @@
 "use server";
 
-import { createClient } from "@/utils/supabase/server";
 import { revalidatePath } from "next/cache";
+
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 export async function setupHotelAndUnits(prevState: unknown, formData: FormData) {
   const hotelName = formData.get("hotelName") as string;
@@ -12,7 +13,11 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
     return { error: "Please provide a valid hotel name and a unit count between 1 and 200." };
   }
 
-  const supabase = await createClient();
+  // Use the admin client to bypass RLS for this initial setup script
+  const supabase = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
   // 1. Create Organization
   const { data: org, error: orgError } = await supabase
