@@ -33,14 +33,16 @@ export async function parseAIStream(
       } catch (e) {
         // Ignore malformed JSON tokens
       }
-    } else if (line.startsWith("d:") || line.startsWith("2:")) {
+    } else if (line.startsWith("d:") || line.startsWith("2:") || line.startsWith("e:")) {
       hasDataStreamLines = true;
-      // metadata/end markers — no text to extract
-    } else if (!hasDataStreamLines) {
-      // Raw text fallback (non-DataStream response)
-      accumulatedContent += line + "\n";
+      // metadata markers — no text to extract
+    } else {
+      // Robust Fallback: if it's not a data line, or if we haven't seen them yet,
+      // treat as raw text.
+      accumulatedContent += line + (hasDataStreamLines ? "" : "\n");
       onContent(accumulatedContent);
     }
+
   }
 
   let done = false;

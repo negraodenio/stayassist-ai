@@ -118,7 +118,8 @@ ${knowledgeContext}
 
     // 5. LLM Streaming
     const result = await streamText({
-      model: openrouter("google/gemini-2.0-flash"),
+      model: openrouter("google/gemini-2.0-flash-001"),
+
 
       system: systemPrompt,
       messages,
@@ -147,14 +148,12 @@ ${knowledgeContext}
       "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
     };
 
-    // 6. Return standard Text Stream for maximum compatibility with PWA manual parser
-    return res.toTextStreamResponse({ 
-      headers: {
-        ...customHeaders,
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      } 
-    });
+    // 6. Return Data Stream (Standard)
+    const res = result as any;
+    if (typeof res.toDataStreamResponse === 'function') {
+      return res.toDataStreamResponse({ headers: customHeaders });
+    }
+    return res.toTextStreamResponse({ headers: customHeaders });
 
   } catch (error) {
     console.error("Chat route error:", error);
