@@ -25,6 +25,7 @@ export function QrManagement() {
   const [state, setState] = useState<LoadState>("loading");
   const [notice, setNotice] = useState<string | null>(null);
   const [previewUnit, setPreviewUnit] = useState<GuestUnit | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const missingCount = useMemo(
     () => units.filter((unit) => !unit.qrToken).length,
@@ -60,28 +61,54 @@ export function QrManagement() {
     });
   }, []);
 
-  async function generateMissing() {
+  async function generateSelected() {
+    if (selectedIds.size === 0) return;
+
     setState("saving");
     setNotice(null);
 
     try {
-      const response = await fetch("/api/qr/units", { method: "POST" });
-      const payload = (await response.json().catch(() => ({}))) as {
-        units?: GuestUnit[];
-        message?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.message || "Unable to generate QR codes.");
-      }
-
-      setUnits(payload.units || []);
-      setState("idle");
-    } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "Unable to generate QR codes.",
+      const results = await Promise.all(
+        Array.from(selectedIds).map(async (id) => {
+          const response = await fetch(`/api/qr/units/${id}`, { method: "PATCH" });
+          if (!response.ok) return null;
+          const payload = await response.json();
+          return payload.unit as GuestUnit;
+        })
       );
+
+      const successful = results.filter((u): u is GuestUnit => u !== null);
+      
+      setUnits((current) =>
+        current.map((unit) => {
+          const updated = successful.find((s) => s.id === unit.id);
+          return updated || unit;
+        })
+      );
+      
+      setSelectedIds(new Set());
+      setState("idle");
+      setNotice(`Successfully generated ${successful.length} QR codes.`);
+    } catch (error) {
+      setNotice("Error generating some QR codes.");
       setState("error");
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === units.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(units.map((u) => u.id)));
     }
   }
 
@@ -147,14 +174,16 @@ export function QrManagement() {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={generateMissing}
-                disabled={state === "saving" || missingCount === 0}
-                className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {state === "saving" ? "Generating..." : "Generate missing QR codes"}
-              </button>
+              {selectedIds.size > 0 && (
+                <button
+                  type="button"
+                  onClick={generateSelected}
+                  disabled={state === "saving"}
+                  className="rounded-full bg-accent-strong px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent disabled:opacity-45"
+                >
+                  {state === "saving" ? "Generating..." : `Generate Selected (${selectedIds.size})`}
+                </button>
+              )}
               <a
                 href="/dashboard"
                 className="rounded-full border border-border bg-white/75 px-4 py-2 text-sm font-semibold text-navy transition hover:border-accent"
@@ -190,7 +219,15 @@ export function QrManagement() {
           </div>
 
           <div className="mt-6 overflow-hidden rounded-[28px] border border-border bg-white/82">
-            <div className="hidden grid-cols-[1.1fr_0.9fr_0.7fr_1fr_1.2fr] gap-4 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:grid">
+            <div className="hidden grid-cols-[40px_1.1fr_0.9fr_0.7fr_1fr_1.2fr] gap-4 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:grid">
+              <div className="flex items-center justify-center">
+                <input 
+                  type="checkbox" 
+                  checked={selectedIds.size === units.length && units.length > 0}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-border text-navy focus:ring-navy"
+                />
+              </div>
               <span>Property</span>
               <span>Unit</span>
               <span>Status</span>
@@ -206,8 +243,16 @@ export function QrManagement() {
                 return (
                   <article
                     key={unit.id}
-                    className="grid gap-4 border-b border-border/70 px-5 py-5 last:border-b-0 lg:grid-cols-[1.1fr_0.9fr_0.7fr_1fr_1.2fr] lg:items-center"
+                    className="grid gap-4 border-b border-border/70 px-5 py-5 last:border-b-0 lg:grid-cols-[40px_1.1fr_0.9fr_0.7fr_1fr_1.2fr] lg:items-center"
                   >
+                    <div className="flex items-center justify-center">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.has(unit.id)}
+                        onChange={() => toggleSelect(unit.id)}
+                        className="h-4 w-4 rounded border-border text-navy focus:ring-navy"
+                      />
+                    </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:hidden">
                         Property

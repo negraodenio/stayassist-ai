@@ -26,6 +26,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   const [unit, setUnit] = useState<GuestUnit | null>(null);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [state, setState] = useState<RequestState>("loading");
+  const [pendingType, setPendingType] = useState<GuestRequestType | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -133,6 +134,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     }
 
     setState("saving");
+    setPendingType(type);
     setNotice(null);
 
     try {
@@ -162,6 +164,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to create request.");
       setState("error");
+    } finally {
+      setPendingType(null);
     }
   }
 
@@ -244,7 +248,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                   {requestTypeDescriptions[type]}
                 </p>
                 <span className="mt-6 inline-flex rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-[#1c4755]">
-                  {state === "saving" ? "Creating..." : "Create request"}
+                  {pendingType === type ? "Creating..." : "Create request"}
                 </span>
               </button>
             ))}
