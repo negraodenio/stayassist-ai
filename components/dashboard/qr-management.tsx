@@ -26,6 +26,7 @@ export function QrManagement() {
   const [notice, setNotice] = useState<string | null>(null);
   const [previewUnit, setPreviewUnit] = useState<GuestUnit | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
 
   const missingCount = useMemo(
     () => units.filter((unit) => !unit.qrToken).length,
@@ -60,6 +61,13 @@ export function QrManagement() {
       loadUnits();
     });
   }, []);
+
+  const filteredUnits = useMemo(() => {
+    return units.filter(unit => 
+      unit.propertyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      unit.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [units, searchQuery]);
 
   async function generateSelected() {
     if (selectedIds.size === 0) return;
@@ -105,10 +113,10 @@ export function QrManagement() {
   }
 
   function toggleSelectAll() {
-    if (selectedIds.size === units.length) {
+    if (selectedIds.size === filteredUnits.length && filteredUnits.length > 0) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(units.map((u) => u.id)));
+      setSelectedIds(new Set(filteredUnits.map((u) => u.id)));
     }
   }
 
@@ -199,6 +207,21 @@ export function QrManagement() {
             </div>
           ) : null}
 
+          <div className="mt-6">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search properties, floors, or room numbers..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full rounded-2xl border border-border bg-white/80 py-4 pl-12 pr-4 text-sm outline-none transition focus:border-accent luxury-ring"
+              />
+              <svg className="absolute left-4 top-4 h-5 w-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <article className="rounded-[24px] border border-border bg-white/80 p-5">
               <p className="text-sm text-muted">Units</p>
@@ -223,7 +246,7 @@ export function QrManagement() {
               <div className="flex items-center justify-center">
                 <input 
                   type="checkbox" 
-                  checked={selectedIds.size === units.length && units.length > 0}
+                  checked={selectedIds.size === filteredUnits.length && filteredUnits.length > 0}
                   onChange={toggleSelectAll}
                   className="h-4 w-4 rounded border-border text-navy focus:ring-navy"
                 />
@@ -235,8 +258,8 @@ export function QrManagement() {
               <span>Actions</span>
             </div>
 
-            {units.length > 0 ? (
-              units.map((unit) => {
+            {filteredUnits.length > 0 ? (
+              filteredUnits.map((unit) => {
                 const isActive = Boolean(unit.qrToken);
                 const guestUrl = unit.qrToken ? getGuestUrl(unit.qrToken) : "";
 
