@@ -11,7 +11,8 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
       propertyId,
       unitName: "Admin Test",
     },
-  });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any) as any;
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
