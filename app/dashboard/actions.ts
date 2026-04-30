@@ -59,6 +59,56 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
 
 import { createClient } from "@/utils/supabase/server";
 
+// ─── Configuração RAG ──────────────────────────────────────────────────────────
+const CHUNK_SIZE = 500;       // tokens/palavras aproximadas por chunk
+const CHUNK_OVERLAP = 100;    // overlap para manter contexto
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_EXTENSIONS = [".pdf", ".txt"];
+
+/**
+ * Divide o texto em chunks com overlap para manter coerência semântica.
+ */
+function chunkText(text: string, chunkSize = CHUNK_SIZE, overlap = CHUNK_OVERLAP): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < words.length) {
+    const end = Math.min(start + chunkSize, words.length);
+    const chunk = words.slice(start, end).join(" ");
+    if (chunk.trim().length > 0) {
+      chunks.push(chunk);
+    }
+    start += chunkSize - overlap;
+    if (start >= words.length - overlap && start < words.length) break; // Evita chunks minúsculos no fim
+  }
+  return chunks;
+}
+
+/**
+ * Gera embeddings via OpenRouter (openai/text-embedding-3-small).
+ */
+async function generateEmbedding(text: string): Promise<number[]> {
+  const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "openai/text-embedding-3-small",
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Embedding API error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding as number[];
+}
+
 export async function addKnowledgeSnippet(prevState: unknown, formData: FormData) {
   const propertyId = formData.get("propertyId") as string;
   const topic = formData.get("topic") as string;
@@ -69,20 +119,27 @@ export async function addKnowledgeSnippet(prevState: unknown, formData: FormData
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("property_knowledge")
-    .insert({
-      property_id: propertyId,
-      topic,
-      content,
-    });
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
 
-  if (error) {
-    return { error: `Failed to add knowledge: ${error.message}` };
+  try {
+    const embedding = await generateEmbedding(`${topic}: ${content}`);
+    const { error } = await supabase
+      .from("property_knowledge")
+      .insert({
+        property_id: propertyId,
+        topic,
+        content,
+        embedding,
+        source_file: "manual_entry",
+      });
+
+    if (error) throw error;
+    revalidatePath("/dashboard", "layout");
+    return { success: true };
+  } catch (err) {
+    return { error: `Failed to add knowledge: ${err instanceof Error ? err.message : "Unknown error"}` };
   }
-
-  revalidatePath("/dashboard", "layout");
-  return { success: true };
 }
 
 export async function deleteKnowledgeSnippet(id: string) {
@@ -107,48 +164,94 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
     return { error: "Please select a valid file." };
   }
 
+  if (file.size > MAX_FILE_SIZE) {
+    return { error: "File too large (max 10MB)." };
+  }
+
+  const ext = "." + file.name.split(".").pop()?.toLowerCase();
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    return { error: "Unsupported file extension." };
+  }
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  // Verify property ownership
+  const { data: propCheck } = await supabase
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .eq("user_id", user.id)
+    .single();
+
+  if (!propCheck) return { error: "Property not found or access denied." };
+
   try {
     let text = "";
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     if (file.type === "application/pdf") {
-      // Dynamic import to avoid build issues with pdf-parse ESM
-      // @ts-expect-error - pdf-parse has weird ESM types
-      const pdf = (await import("pdf-parse")).default;
+      // Magic bytes check
+      const magic = buffer.slice(0, 4).toString("ascii");
+      if (!magic.startsWith("%PDF")) return { error: "Invalid PDF file." };
+
+      // @ts-ignore
+      const pdfModule = await import("pdf-parse");
+      const pdf = (pdfModule as any).default || pdfModule;
       const data = await pdf(buffer);
       text = data.text;
-    } else if (file.type === "text/plain") {
-      text = buffer.toString("utf-8");
     } else {
-      return { error: "Unsupported file type. Please upload PDF or TXT." };
+      text = buffer.toString("utf-8");
     }
 
-    if (!text || (text || "").trim().length === 0) {
-      return { error: "No text could be extracted from the file." };
-    }
+    if (!text.trim()) return { error: "No text found in file." };
 
-    // Clean up text a bit (remove excessive whitespace)
-    const cleanedText = text.replace(/\s+/g, " ").trim();
+    const cleanedText = text
+      .replace(/\r\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .trim();
 
-    const supabase = await createClient();
-    const { error } = await supabase
+    const chunks = chunkText(cleanedText);
+    
+    // Clear old data for this file
+    await supabase
       .from("property_knowledge")
-      .insert({
-        property_id: propertyId,
-        topic: `Document: ${file.name}`,
-        content: cleanedText.slice(0, 30000), // Cap content to prevent huge DB rows for now
-      });
+      .delete()
+      .eq("property_id", propertyId)
+      .eq("source_file", file.name);
 
-    if (error) {
-      return { error: `Failed to save document: ${error.message}` };
+    // Process in batches
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+      const batch = chunks.slice(i, i + BATCH_SIZE);
+      const rows = await Promise.all(batch.map(async (chunk, idx) => {
+        const embedding = await generateEmbedding(chunk);
+        return {
+          property_id: propertyId,
+          source_file: file.name,
+          topic: `${file.name} (Part ${i + idx + 1})`,
+          content: chunk,
+          embedding,
+          chunk_index: i + idx,
+        };
+      }));
+
+      const { error: insertError } = await supabase
+        .from("property_knowledge")
+        .insert(rows);
+      
+      if (insertError) throw insertError;
     }
 
     revalidatePath("/dashboard", "layout");
-    return { success: true };
+    return { success: true, message: `Processed ${chunks.length} segments.` };
   } catch (err) {
     console.error("Upload error:", err);
-    return { error: `Error processing file: ${err instanceof Error ? err.message : "Unknown error"}` };
+    return { error: `Processing error: ${err instanceof Error ? err.message : "Unknown error"}` };
   }
 }
+
 

@@ -12,6 +12,31 @@ const openrouter = createOpenAI({
   },
 });
 
+/**
+ * Gera embedding para a pergunta do usuário.
+ */
+async function generateQueryEmbedding(query: string): Promise<number[]> {
+  const response = await fetch("https://openrouter.ai/api/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "openai/text-embedding-3-small",
+      input: query,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`Embedding error ${response.status}: ${body}`);
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding as number[];
+}
+
 export async function POST(req: Request) {
   try {
     const { messages, propertyId, unitName } = await req.json();
@@ -20,19 +45,37 @@ export async function POST(req: Request) {
       return new Response("Missing propertyId", { status: 400 });
     }
 
-    // 1. Fetch Knowledge Base for this property
     const supabase = await createClient();
-    const { data: knowledge } = await supabase
-      .from("property_knowledge")
-      .select("topic, content")
-      .eq("property_id", propertyId);
 
-    // 2. Build the System Prompt (RAG)
-    let knowledgeContext = "No specific rules provided.";
-    if (knowledge && knowledge.length > 0) {
-      knowledgeContext = knowledge
-        .map((k) => `[Topic: ${k.topic}]\n${k.content}`)
-        .join("\n\n");
+    // 1. Pega a última mensagem do usuário para buscar no RAG
+    const lastUserMessage = [...messages].reverse().find(m => m.role === "user");
+    let knowledgeContext = "Nenhuma informação específica encontrada no manual do hotel.";
+    let sourcesUsed: string[] = [];
+
+    if (lastUserMessage) {
+      try {
+        // 2. Gera embedding da pergunta
+        const queryEmbedding = await generateQueryEmbedding(lastUserMessage.content);
+
+        // 3. Busca os 5 trechos mais relevantes (Top-K) via RPC pgvector
+        const { data: chunks, error: rpcError } = await supabase.rpc("match_property_knowledge", {
+          p_property_id: propertyId,
+          query_embedding: queryEmbedding,
+          match_threshold: 0.5, // Limite de similaridade (ajustável)
+          match_count: 5,
+        });
+
+        if (rpcError) throw rpcError;
+
+        if (chunks && chunks.length > 0) {
+          knowledgeContext = chunks
+            .map((c: any, i: number) => `[Fonte: ${c.source_file} - Relevância: ${Math.round(c.similarity * 100)}%]\n${c.content}`)
+            .join("\n\n---\n\n");
+          sourcesUsed = Array.from(new Set(chunks.map((c: any) => c.source_file as string)));
+        }
+      } catch (err) {
+        console.error("RAG Retrieval error:", err);
+      }
     }
 
     const systemPrompt = `You are a professional luxury hotel AI Concierge named StayAssist AI.
@@ -41,20 +84,22 @@ Current context:
 - You are assisting the guest staying in ${unitName || "a room"}.
 - Be extremely concise, elegant, and helpful. Always adopt a 5-star hospitality tone.
 
-=== HOTEL KNOWLEDGE ===
+=== CONHECIMENTO RELEVANTE (RAG) ===
+Abaixo estão trechos do manual do hotel que podem ajudar a responder a pergunta atual:
 ${knowledgeContext}
-=======================
+===================================
 
-CRITICAL INSTRUCTIONS FOR RECOMMENDATIONS:
-1. When a guest asks for local recommendations (restaurants, sights, services):
-   - FIRST, check the "HOTEL KNOWLEDGE" section above. If the hotel owner has provided specific recommendations or partners, prioritize these in your answer.
-   - SECOND, if the requested information is not in the Hotel Knowledge, or if the guest asks for more variety, use the 'search_nearby_places' tool to fetch live data from Google.
-   - ALWAYS prefer the hotel's own suggestions if available.
-   - NEVER ignore the hotel knowledge. It represents the owner's curated recommendations and partnerships.
+CRITICAL INSTRUCTIONS:
+1. Para perguntas sobre o hotel (regras, horários, serviços, instalações):
+   - Use PRIORITARIAMENTE o "CONHECIMENTO RELEVANTE" acima.
+   - Se a informação não estiver lá, diga educadamente que não tem essa informação específica e sugira falar com a recepção.
 
-2. If the guest asks about hotel internal policies (wifi, breakfast, checkout):
-   - ONLY use the Hotel Knowledge. Do not use external tools.
-   - If not found, suggest contacting the front desk.`;
+2. Para recomendações locais (restaurantes, lazer):
+   - PRIMEIRO, veja se há algo no Conhecimento Relevante acima (recomendações do dono).
+   - SEGUNDO, se não houver ou se o hóspede quiser mais, use a ferramenta 'search_nearby_places' (Google).
+
+3. Para perguntas gerais (clima, tradução, dicas de viagem gerais):
+   - Use seu próprio conhecimento de IA.`;
 
     // 3. Define Tools
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
