@@ -134,12 +134,24 @@ ${knowledgeContext}
       }
     });
 
-    // Send Debug Info in DataStream (Vercel SDK format)
-    return result.toDataStreamResponse({
+    // Use a dynamic check for the response method to handle version variations (Vercel SDK TS bug)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const res = result as any;
+    const streamDataPayload = {
       data: userType === "admin" 
         ? { debug: debugInfo, sources: sourcesUsed } 
         : { isRAG: sourcesUsed.length > 0 } // Safe flag for guests
-    });
+    };
+
+    if (typeof res.toDataStreamResponse === 'function') {
+      return res.toDataStreamResponse(streamDataPayload);
+    }
+    if (typeof res.toTextStreamResponse === 'function') {
+      return res.toTextStreamResponse();
+    }
+    
+    // Fallback absoluto
+    return new Response("Stream format not supported", { status: 500 });
 
   } catch (error) {
     console.error("Chat route error:", error);
