@@ -126,6 +126,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         body: JSON.stringify({
           messages: updatedMessages,
           propertyId: unit.propertyId,
+          propertyName: unit.propertyName,
           unitName: unit.name,
           sessionId: token || "guest-anonymous-session",
           isGuest: true,

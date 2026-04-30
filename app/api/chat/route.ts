@@ -19,7 +19,7 @@ const openrouter = createOpenAI({
 
 export async function POST(req: Request) {
   try {
-    const { messages: rawMessages, propertyId: rawPropertyId, unitName, sessionId, isGuest } = await req.json();
+    const { messages: rawMessages, propertyId: rawPropertyId, propertyName, unitName, sessionId, isGuest } = await req.json();
     const propertyId = rawPropertyId?.trim();
 
     if (!propertyId) {
@@ -73,6 +73,8 @@ export async function POST(req: Request) {
 
         // 4. Token/Context Slicing (Max 4000 chars to avoid LLM limits/costs)
         knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
+        console.log(`[RAG DEBUG] Context length: ${knowledgeContext.length}. First 100 chars: ${knowledgeContext.substring(0, 100)}`);
+        console.log(`[RAG DEBUG] Messages count: ${messages.length}`);
 
         // Save Debug Info for Admin UI
         debugInfo = {
@@ -93,13 +95,12 @@ export async function POST(req: Request) {
         sendRequestWhatsAppAlert({
           id: "chat-escalation",
           propertyId: propertyId,
-          property: unitName ? `Room ${unitName}` : "Guest Chat",
+          property: propertyName || unitName || "StayAssist Guest",
           unitId: "chat",
           room: unitName || "Guest",
           type: "help" as GuestRequestType,
           status: "Open",
           createdAt: new Date().toISOString(),
-          // Passa a mensagem do hóspede para incluir no WhatsApp
           guestMessage: userMessageContent,
         } as any).catch((err: Error) => console.error("WhatsApp error:", err));
       }
