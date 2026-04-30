@@ -138,33 +138,18 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       const isRAG = response.headers.get("X-Is-Rag") === "true";
 
       const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let content = "";
-      const assistantId = (Date.now() + 1).toString();
+      if (!reader) throw new Error("No response body");
 
+      const assistantId = (Date.now() + 1).toString();
       setChatMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", isRAG }]);
 
-      while (reader && !done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          let isDataStream = false;
-          chunk.split("\n").forEach(line => {
-            if (line.startsWith("0:")) {
-              isDataStream = true;
-              try { content += JSON.parse(line.substring(2)); } catch(e) {}
-            } else if (line.startsWith("d:") || line.startsWith("2:")) {
-              isDataStream = true;
-            }
-          });
-          if (!isDataStream) content += chunk;
-          setChatMessages(prev =>
-            prev.map(m => m.id === assistantId ? { ...m, content } : m)
-          );
-        }
-      }
+      const { parseAIStream } = await import("@/lib/stream-parser");
+      await parseAIStream(reader, (content) => {
+        setChatMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content } : m)
+        );
+      });
+
     } catch (err) {
       console.error("Chat error:", err);
       setChatMessages(prev => [...prev, { id: Date.now().toString(), role: "assistant", content: "Sorry, I'm having trouble connecting. Please try again." }]);

@@ -61,41 +61,18 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
       }
 
       const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let assistantContent = "";
+      if (!reader) throw new Error("No reader");
 
       const assistantMsgId = (Date.now() + 1).toString();
       setMessages((prev) => [...prev, { id: assistantMsgId, role: "assistant", content: "" }]);
 
-      while (reader && !done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          
-          let isDataStream = false;
-          const lines = chunk.split("\n");
-          
-          lines.forEach(line => {
-             if (line.startsWith("0:")) {
-                 isDataStream = true;
-                 try { assistantContent += JSON.parse(line.substring(2)); } catch(e) {}
-             } else if (line.startsWith("d:") || line.startsWith("2:")) {
-                 isDataStream = true;
-             }
-          });
+      const { parseAIStream } = await import("@/lib/stream-parser");
+      await parseAIStream(reader, (content) => {
+        setMessages((prev) =>
+          prev.map(m => m.id === assistantMsgId ? { ...m, content } : m)
+        );
+      });
 
-          // Se não for o protocolo da Vercel (fallback), apenas concatena o texto bruto
-          if (!isDataStream) {
-              assistantContent += chunk;
-          }
-          
-          setMessages((prev) => 
-            prev.map(m => m.id === assistantMsgId ? { ...m, content: assistantContent } : m)
-          );
-        }
-      }
     } catch (error) {
       console.error("Chat Error:", error);
       setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Error connecting to AI. Please check your console." }]);
