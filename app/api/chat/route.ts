@@ -35,16 +35,16 @@ export async function POST(req: Request) {
     }
 
     // Clean messages for the LLM (only role and content)
-    console.log("[RAG DEBUG] Messages Received Count:", rawMessages.length);
-    
-    // TESTE RADICAL: Ignorar histórico e pegar apenas a ÚLTIMA mensagem
-    // Se isso funcionar, o problema é a formatação do histórico no PWA
-    const lastMessage = rawMessages[rawMessages.length - 1];
-    const messages = [
-      { role: "user", content: lastMessage.content }
-    ] as any[];
+    // 1. Limpeza Cirúrgica do Histórico (CORREÇÃO DO BUG DO 2º TURNO)
+    console.log("[RAG DEBUG] Messages Received:", rawMessages.length);
+    const messages = rawMessages
+      .filter((m: any) => (m.role === "user" || m.role === "assistant") && m.content)
+      .map((m: any) => ({
+        role: m.role as "user" | "assistant",
+        content: typeof m.content === "string" ? m.content : String(m.content)
+      }));
 
-    const userMessageContent = lastMessage.content;
+    const userMessageContent = messages[messages.length - 1]?.content || "";
     
     // Parâmetros da Sessão (Default fallback para testes admin)
     const activeSession = sessionId || "admin-test-session";
@@ -73,8 +73,8 @@ export async function POST(req: Request) {
         ];
 
 
-        // 3. Skip Re-ranking for speed
-        const selectedChunks = combinedChunks.slice(0, 3);
+        // 3. Re-ranking (Restaurado para qualidade máxima)
+        const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
 
         // 4. Token/Context Slicing (Max 4000 chars to avoid LLM limits/costs)
         knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
@@ -117,10 +117,10 @@ ${knowledgeContext}
     };
 
 
-    // 5. LLM Streaming with Anthropic Claude 3 Haiku (More stable for mobile streams)
-    console.log(`[RAG DEBUG] Starting stream with ultra-stable model: anthropic/claude-3-haiku`);
+    // 5. LLM Streaming com Gemini 2.0 Flash (Restaurado)
+    console.log(`[RAG DEBUG] Starting stream with stable model: google/gemini-2.0-flash-001`);
     const result = await streamText({
-      model: openrouter("anthropic/claude-3-haiku"),
+      model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
       onFinish: ({ text }) => {
@@ -139,10 +139,16 @@ ${knowledgeContext}
           } as any).catch(e => console.error("WhatsApp error:", e));
         }
 
-        // MEMÓRIA DESATIVADA PARA TESTE
-        console.log(`[RAG DEBUG] Stream Finished. Length: ${text.length}. Memory Save Skipped.`);
+        // 7. Save Memory (Restaurado)
+        if (userMessageContent) {
+          saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
+            .catch(e => console.error("Memory save error (user):", e));
+        }
+        saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
+          .catch(e => console.error("Memory save error (assistant):", e));
       }
     });
+
 
 
     // 6. Return standard DataStream
