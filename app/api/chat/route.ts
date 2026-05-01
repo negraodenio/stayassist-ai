@@ -133,41 +133,44 @@ ${knowledgeContext || "No specific property context provided."}
     };
 
 
-    // 5. LLM Streaming with Tools
+    // 5. Tool Definition (Direct Object bypass for SDK v6 types)
+    const searchNearbyTool: any = {
+      description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
+      parameters: z.object({
+        type: z.string(),
+        radius: z.number().optional(),
+      }),
+      execute: async ({ type, radius }: { type: string; radius?: number }) => {
+        const searchRadius = radius ?? 1500;
+        console.log(`[TOOL] Searching for ${type} within ${searchRadius}m`);
+        
+        const lat = propLat ?? 38.7167; 
+        const lng = propLng ?? -9.1333;
+        
+        const places = await searchNearbyPlaces(lat, lng, type, searchRadius);
+        
+        return {
+          location: propertyName || "the hotel",
+          results: places.map(p => ({
+            name: p.displayName?.text || "Unknown",
+            address: p.formattedAddress || "No address",
+            rating: p.rating ?? 0,
+            category: p.primaryTypeDisplayName?.text || "Place",
+            mapsLink: p.googleMapsUri
+          }))
+        };
+      }
+    };
+
+    // 6. LLM Streaming with Tools
     console.log(`[RAG DEBUG] Starting stream with stable model and tools: google/gemini-2.0-flash-001`);
     const result = await streamText({
       model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
       tools: {
-        searchNearby: tool({
-          description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
-          parameters: z.object({
-            type: z.string(),
-            radius: z.number().optional(),
-          }),
-          execute: async ({ type, radius }: { type: string; radius?: number }) => {
-            const searchRadius = radius ?? 1500;
-            console.log(`[TOOL] Searching for ${type} within ${searchRadius}m`);
-            
-            const lat = propLat ?? 38.7167; 
-            const lng = propLng ?? -9.1333;
-            
-            const places = await searchNearbyPlaces(lat, lng, type, searchRadius);
-            
-            return {
-              location: propertyName || "the hotel",
-              results: places.map(p => ({
-                name: p.displayName?.text || "Unknown",
-                address: p.formattedAddress || "No address",
-                rating: p.rating ?? 0,
-                category: p.primaryTypeDisplayName?.text || "Place",
-                mapsLink: p.googleMapsUri
-              }))
-            };
-          }
-        })
-      } as any,
+        searchNearby: searchNearbyTool
+      },
       maxSteps: 5,
       onFinish: ({ text }) => {
 
