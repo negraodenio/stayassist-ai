@@ -166,9 +166,8 @@ ${knowledgeContext || "No specific property context provided."}
               }))
             };
           }
-
         })
-      },
+      } as any,
       maxSteps: 5,
       onFinish: ({ text }) => {
 
