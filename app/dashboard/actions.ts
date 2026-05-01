@@ -1,9 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+const ratelimit = process.env.UPSTASH_REDIS_REST_URL 
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(20, "60 s"),
+      analytics: true,
+      prefix: "@upstash/ratelimit_admin",
+    })
+  : null;
 
 
 export async function setupHotelAndUnits(prevState: unknown, formData: FormData) {
@@ -197,6 +207,12 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Unauthorized" };
+
+  // Rate Limit Check
+  if (ratelimit) {
+    const { success } = await ratelimit.limit(user.id);
+    if (!success) return { error: "Limite de uploads atingido. Tente novamente em 1 minuto." };
+  }
 
   // Verify property ownership
   const { data: propCheck } = await supabase
