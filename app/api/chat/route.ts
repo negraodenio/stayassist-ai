@@ -162,13 +162,11 @@ ${knowledgeContext || "No specific property context provided."}
       }
     };
 
-    // 6. LLM Streaming (Diagnostic mode: No tools)
+    // 6. LLM Streaming (Pure Text Mode for maximum compatibility)
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
-      // tools: { searchNearby: searchNearbyTool },
-      // maxSteps: 5,
       onFinish: ({ text }: any) => {
         // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
@@ -195,15 +193,14 @@ ${knowledgeContext || "No specific property context provided."}
       }
     } as any);
 
-    // 6. Return standard DataStream
+    // 6. Return Pure Text Stream (resilient to PWA and multiple turns)
     const res = result as any;
-    if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse({ 
-        headers: { "Cache-Control": "no-store" } 
-      });
-    }
     return res.toTextStreamResponse({ 
-      headers: { "Cache-Control": "no-store" } 
+      headers: { 
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        "X-Is-Rag": isReranked ? "true" : "false"
+      } 
     });
 
 
