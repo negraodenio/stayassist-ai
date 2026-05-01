@@ -109,6 +109,16 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, chatLoading]);  async function handleChatSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    // LOG INDUSTRIAL PARA DIAGNÓSTICO
+    console.log("[CHAT DEBUG]", {
+      chatInput: chatInput.trim(),
+      chatLoading,
+      unit: unit?.name,
+      unitExists: !!unit,
+      sessionId,
+    });
+
     if (!chatInput.trim() || chatLoading || !unit) return;
 
     const userMessageContent = chatInput.trim();
@@ -126,7 +136,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       isRAG: false,
     };
 
-    // Snapshot do histórico ANTES de qualquer setState para evitar stale closures
     const historySnapshot = chatMessages;
 
     setChatMessages([...historySnapshot, userMessage, assistantPlaceholder]);
@@ -142,7 +151,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     };
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    const connectionTimeout = setTimeout(() => controller.abort(), 20000);
+    let streamTimeout: NodeJS.Timeout | null = null;
 
     try {
       const response = await fetch("/api/chat", {
@@ -166,9 +176,18 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       });
 
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      
+      // Conexão estabelecida: cancela o timeout inicial
+      clearTimeout(connectionTimeout);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("Response body não disponível");
+
+      // Timeout de segurança para a duração total da stream (30s)
+      streamTimeout = setTimeout(() => {
+        console.warn("[DEBUG] Stream timeout atingido. Forçando fecho do reader.");
+        reader.cancel().catch(console.error);
+      }, 30000);
 
       const decoder = new TextDecoder();
       let hasData = false;
@@ -176,7 +195,10 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       try {
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log("[DEBUG] Stream finalizada normalmente (done: true)");
+            break;
+          }
 
           const chunk = decoder.decode(value, { stream: true });
           if (chunk) {
@@ -185,7 +207,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
           }
         }
         
-        // Flush final do decoder para libertar bytes pendentes
         const finalChunk = decoder.decode();
         if (finalChunk) {
           hasData = true;
@@ -197,12 +218,19 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
       if (!hasData) throw new Error("Stream vazio");
 
-    } catch (err: any) {
-      console.error("[CHAT FATAL ERROR]", err);
-      updateAssistant(() => "O concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?");
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        console.error("[DEBUG] Timeout atingido!");
+        updateAssistant(() => "O concierge está a demorar mais do que o habitual. Por favor, tente novamente ou contacte-nos via WhatsApp.");
+      } else {
+        console.error("[CHAT FATAL ERROR]", err);
+        updateAssistant(() => "O concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?");
+      }
     } finally {
-      clearTimeout(timeoutId);
+      clearTimeout(connectionTimeout);
+      if (streamTimeout) clearTimeout(streamTimeout);
       setChatLoading(false);
+      console.log("[DEBUG] ChatLoading desligado.");
     }
   }
 
