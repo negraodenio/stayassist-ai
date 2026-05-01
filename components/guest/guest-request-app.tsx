@@ -442,10 +442,15 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                           ) : m.content ? (
                             m.content
                           ) : chatLoading ? (
-                            <div className="flex items-center gap-1.5 py-1">
-                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20 [animation-delay:-0.3s]"></div>
-                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20 [animation-delay:-0.15s]"></div>
-                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20"></div>
+                            <div className="flex items-center gap-3 py-2">
+                              <div className="flex gap-1">
+                                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/30 [animation-delay:-0.3s]"></div>
+                                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/30 [animation-delay:-0.15s]"></div>
+                                <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/30"></div>
+                              </div>
+                              <span className="text-[10px] font-medium uppercase tracking-wider text-muted/60 animate-pulse">
+                                {lang === "pt" ? "Concierge está a pesquisar..." : "Concierge is searching..."}
+                              </span>
                             </div>
                           ) : (
                             "..."

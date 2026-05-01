@@ -163,10 +163,10 @@ ${knowledgeContext || "No specific property context provided."}
     };
 
     // 6. LLM Streaming with Tools (Blindado para Multi-step)
-    console.log(`[RAG DEBUG] Starting stream with stable model and tools: google/gemini-2.0-flash-001`);
+    console.log(`[RAG DEBUG] Starting stream with stable model and tools: openai/gpt-4o-mini`);
     
     const streamConfig: any = {
-      model: openrouter("google/gemini-2.0-flash-001"),
+      model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
       tools: {
@@ -201,14 +201,19 @@ ${knowledgeContext || "No specific property context provided."}
 
     const result = await streamText(streamConfig);
 
-
-
     // 6. Return standard DataStream
     const res = result as any;
+    const responseHeaders = { 
+      ...customHeaders,
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0"
+    };
+
     if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse({ headers: customHeaders });
+      return res.toDataStreamResponse({ headers: responseHeaders });
     }
-    return res.toTextStreamResponse({ headers: customHeaders });
+    return res.toTextStreamResponse({ headers: responseHeaders });
 
 
   } catch (error: any) {
