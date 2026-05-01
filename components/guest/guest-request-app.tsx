@@ -239,29 +239,18 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                 </p>
               </div>
               
-              <div className="flex flex-wrap gap-2 rounded-2xl bg-stone-100/50 p-2">
-                {(Object.keys(translations) as SupportedLanguage[]).map((l) => {
-                  const flags: Record<SupportedLanguage, string> = {
-                    en: "🇺🇸",
-                    fr: "🇫🇷",
-                    de: "🇩🇪",
-                    it: "🇮🇹",
-                    es: "🇪🇸",
-                    pt: "🇵🇹",
-                  };
-                  return (
-                    <button
-                      key={l}
-                      onClick={() => setLang(l)}
-                      className={`flex h-11 w-11 items-center justify-center rounded-xl text-xl transition ${
-                        lang === l ? "bg-navy shadow-md shadow-navy/20" : "hover:bg-stone-200"
-                      }`}
-                      title={l.toUpperCase()}
-                    >
-                      <span className="leading-none">{flags[l]}</span>
-                    </button>
-                  );
-                })}
+              <div className="flex flex-wrap gap-1.5 rounded-2xl bg-stone-100/50 p-1.5">
+                {(Object.keys(translations) as SupportedLanguage[]).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl text-[11px] font-bold uppercase transition ${
+                      lang === l ? "bg-navy text-white shadow-md shadow-navy/20" : "text-muted hover:bg-stone-200"
+                    }`}
+                  >
+                    {l === "en" ? "EN" : l.toUpperCase()}
+                  </button>
+                ))}
               </div>
             </div>
 
