@@ -155,9 +155,12 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     let streamTimeout: NodeJS.Timeout | null = null;
 
     try {
+      console.log("%c[CHAT FETCH] Iniciando requisição...", "color: blue; font-weight: bold;");
       const response = await fetch("/api/chat", {
         method: "POST",
         signal: controller.signal,
+        keepalive: true, // SENIOR: Garante que o request termine mesmo se a aba fechar (PWA)
+        credentials: "omit",
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-cache",
@@ -175,9 +178,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         }),
       });
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`%c[CHAT ERROR] Server returned ${response.status}: ${errorText}`, "color: red;");
+        throw new Error(`HTTP ${response.status}`);
+      }
       
       // Conexão estabelecida: cancela o timeout inicial
+      console.log("%c[CHAT STREAM] Conexão aberta, lendo corpo...", "color: green;");
       clearTimeout(connectionTimeout);
 
       const reader = response.body?.getReader();

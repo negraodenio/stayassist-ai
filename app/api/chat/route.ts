@@ -39,19 +39,22 @@ export async function POST(req: Request) {
       return new Response("Missing propertyId", { status: 400 });
     }
 
-    // Clean messages for the LLM (only role and content)
-    // 1. Limpeza Cirúrgica do Histórico (CORREÇÃO DO BUG DO 2º TURNO)
-    console.log("[RAG DEBUG] Messages Received:", rawMessages.length);
+    // 1. Limpeza e Validação de Histórico (Crucial para evitar erro 500 de roles seguidos)
     const messages = rawMessages
-      .filter((m: any) => (m.role === "user" || m.role === "assistant") && m.content)
+      .filter((m: any) => (m.role === "user" || m.role === "assistant"))
       .map((m: any) => ({
         role: m.role as "user" | "assistant",
-        content: typeof m.content === "string" ? m.content : String(m.content)
+        content: (typeof m.content === "string" ? m.content : String(m.content || "")).trim() || " " 
       }));
 
+    if (messages.length === 0) {
+      return new Response("No messages provided", { status: 400 });
+    }
+
     const userMessageContent = messages[messages.length - 1]?.content || "";
-    
     const userType = isGuest ? "guest" : "admin";
+    const finalPropertyName = propertyName || "Hotel";
+    const finalUnitName = unitName || "Room";
 
     // 2. Fetch Property Metadata (Geolocation & Address)
     const supabase = await createClient();
