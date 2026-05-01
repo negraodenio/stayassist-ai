@@ -148,15 +148,20 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       let hasReceivedContent = false;
 
       await parseAIStream(reader, (content) => {
-        hasReceivedContent = true;
-        setChatMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content } : m)
-        );
+        if (content.trim().length > 3) {
+          hasReceivedContent = true;
+          setChatMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content } : m)
+          );
+        }
       });
 
       if (!hasReceivedContent) {
         setChatMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content: "O concierge está ocupado no momento. Por favor, tente novamente em instantes." } : m)
+          prev.map(m => m.id === assistantId ? { 
+            ...m, 
+            content: "O concierge está muito solicitado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?" 
+          } : m)
         );
       }
 
@@ -420,10 +425,16 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                                   : "Would you like to speak directly with our team via WhatsApp?"}
                               </p>
                               <a 
-                                href={`https://wa.me/5511999999999?text=${encodeURIComponent("Olá, estou no " + (unit?.propertyName || "Hotel") + " e preciso de ajuda.")}`}
+                                href={`https://wa.me/5511999999999?text=${encodeURIComponent(`Olá, estou no ${unit?.propertyName || "Hotel"} (Unidade: ${unit?.name || "Guest"}) e preciso de suporte.`)}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs font-bold text-white transition hover:scale-[1.02] active:scale-95"
+                                className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs font-bold text-white transition hover:scale-[1.02] active:scale-95 shadow-sm"
+                                onClick={(e) => {
+                                  // No PWA, às vezes o target _blank falha, vamos reforçar
+                                  if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+                                    window.open(e.currentTarget.href, '_blank');
+                                  }
+                                }}
                               >
                                 <Smartphone size={14} /> WhatsApp Support
                               </a>
