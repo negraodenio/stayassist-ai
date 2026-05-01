@@ -1,56 +1,38 @@
-import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
-import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
-import type { GuestRequestType } from "@/lib/guest-requests";
-
+import { openrouter } from "@ai-sdk/openrouter";
+import { createClient } from "@/utils/supabase/server";
+import { saveMemory } from "@/lib/memory";
 import { generateQueryEmbedding } from "@/lib/embeddings";
 import { getKnowledge } from "@/lib/rag";
-import { getMemory, saveMemory } from "@/lib/memory";
 import { rerankChunks } from "@/lib/rerank";
-import { searchNearbyPlaces } from "@/lib/places";
-import { tool } from "ai";
-import { z } from "zod";
-import { createClient } from "@/utils/supabase/server";
+import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
 
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-  headers: {
-    "HTTP-Referer": "https://stayassist-ai.com",
-    "X-Title": "StayAssist AI Concierge",
-  },
-});
+export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    console.log("[RAG DEBUG] Request received:", JSON.stringify(body));
-    const { messages: rawMessages, propertyId: rawPropertyId, propertyName, unitName, sessionId, isGuest } = body;
-    const propertyId = rawPropertyId?.trim();
+    const { messages: rawMessages, propertyId, propertyName, unitName, sessionId, isGuest } = body;
+
     const activeSession = sessionId || "admin-test-session";
 
-    // Teste de Conectividade Rápido
-    if (rawMessages[rawMessages.length-1]?.content?.toLowerCase() === "ping") {
-      return new Response("pong - servidor ativo e comunicando!", { status: 200 });
-    }
+    if (!propertyId) return new Response("Missing propertyId", { status: 400 });
 
-    if (!propertyId) {
-      console.error("Chat Error: Missing propertyId");
-      return new Response("Missing propertyId", { status: 400 });
-    }
-
-    // 1. Limpeza e Validação de Histórico (Foco em Turnos Múltiplos)
+    // CORRECÇÃO: filtro robusto — rejeita conteúdo vazio que quebra o OpenRouter
     const messages = (rawMessages || [])
-      .filter((m: any) => m && (m.role === "user" || m.role === "assistant"))
+      .filter((m: any) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.trim().length > 0
+      )
       .map((m: any) => ({
         role: m.role as "user" | "assistant",
-        content: String(m.content || " ").trim() || " " 
+        content: m.content.trim(),
       }));
 
-    console.log(`[CHAT TURN] Session: ${activeSession} | Messages: ${messages.length}`);
-
     if (messages.length === 0) {
-      return new Response("No messages provided", { status: 400 });
+      return new Response("No valid messages", { status: 400 });
     }
 
     const userMessageContent = messages[messages.length - 1]?.content || "";
@@ -58,102 +40,45 @@ export async function POST(req: Request) {
     const finalPropertyName = propertyName || "Hotel";
     const finalUnitName = unitName || "Room";
 
-    // 2. Fetch Property Metadata (Geolocation & Address)
-    let propLat: number | null = null;
-    let propLng: number | null = null;
     let propAddress = "";
     let knowledgeContext = "Nenhuma informação específica encontrada.";
     let sourcesUsed: string[] = [];
 
     try {
       const supabase = await createClient();
-      const { data: propertyData } = await supabase
+      const { data: prop } = await supabase
         .from("properties")
-        .select("id, name, address, latitude, longitude")
+        .select("address")
         .eq("id", propertyId)
         .single();
-      
-      if (propertyData) {
-        propLat = propertyData.latitude;
-        propLng = propertyData.longitude;
-        propAddress = propertyData.address || "";
-      }
+      if (prop) propAddress = prop.address || "";
     } catch (e) {
-      console.error("[SURVIVAL] Metadata Fetch Error:", e);
+      console.error("[SURVIVAL] Metadata Error", e);
     }
 
-    // 3. Knowledge Retrieval (RAG)
     if (userMessageContent) {
       try {
         const queryEmbedding = await generateQueryEmbedding(userMessageContent);
         const ragChunks = await getKnowledge(queryEmbedding, propertyId);
-        
-        if (ragChunks && ragChunks.length > 0) {
-          const combinedChunks = ragChunks.map((c: any) => {
+        if (ragChunks?.length > 0) {
+          // CORRECÇÃO: link markdown corrompido removido
+          const combined = ragChunks.map((c: any) => {
             if (c.source_file) sourcesUsed.push(c.source_file);
             return c.content;
           });
-          const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
-          knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
+          const selected = await rerankChunks(userMessageContent, combined);
+          knowledgeContext = selected.join("\n\n---\n\n").slice(0, 4000);
         }
       } catch (e) {
-        console.error("[SURVIVAL] RAG Error:", e);
+        console.error("[SURVIVAL] RAG Error", e);
       }
     }
 
-    const systemPrompt = `You are StayAssist AI, a premium 5-star hotel concierge. 
-Your goal is to provide accurate information based ONLY on the provided context for property-specific questions.
+    const systemPrompt = `You are StayAssist AI, a premium hotel concierge.
+HOTEL: ${finalPropertyName} | UNIT: ${finalUnitName} | LOCATION: ${propAddress}
+CONTEXT: ${knowledgeContext}
+DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o WhatsApp.`;
 
-HOTEL: ${finalPropertyName}
-UNIT: ${finalUnitName}
-LOCATION: ${propAddress || "Address not set"}
-
-CONTEXT:
-${knowledgeContext}
-
-DIRETRIZES:
-1. Seja cordial e profissional.
-2. Utilize o CONTEXTO acima para responder sobre o hotel.
-3. Se a informação não estiver no contexto, ofereça ajuda via WhatsApp ou diga que não sabe.
-`;
-
-    const customHeaders = {
-      "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
-    };
-
-
-    // 5. Tool Definition (Direct Object bypass for SDK v6 types)
-    const searchNearbyTool: any = {
-      description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
-      parameters: z.object({
-        type: z.string(),
-        radius: z.number().optional(),
-      }),
-      execute: async ({ type, radius }: { type: string; radius?: number }) => {
-        const searchRadius = radius ?? 1500;
-        console.log(`[TOOL] Searching for ${type} within ${searchRadius}m`);
-        
-        const lat = propLat ?? 38.7167; 
-        const lng = propLng ?? -9.1333;
-        
-        const places = await searchNearbyPlaces(lat, lng, type, searchRadius);
-        
-        return {
-          location: propertyName || "the hotel",
-          results: places.map(p => ({
-            name: p.displayName?.text || "Unknown",
-            address: p.formattedAddress || "No address",
-            rating: p.rating ?? 0,
-            category: p.primaryTypeDisplayName?.text || "Place",
-            mapsLink: p.googleMapsUri
-          }))
-        };
-      }
-    };
-
-    // 6. LLM Streaming (Survival Mode - Low Level)
-    console.log("[SURVIVAL] Requesting LLM stream...");
-    
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
@@ -164,42 +89,35 @@ DIRETRIZES:
             sendRequestWhatsAppAlert({
               id: "chat-escalation",
               propertyId,
-              property: propertyName || unitName || "StayAssist Guest",
+              property: finalPropertyName,
               unitId: "chat",
-              room: unitName || "Guest",
+              room: finalUnitName,
               type: "help" as any,
               status: "Open",
               createdAt: new Date().toISOString(),
               guestMessage: userMessageContent,
-            } as any).catch(e => console.error("[SURVIVAL] WhatsApp error:", e));
+            } as any).catch((e) => console.error("WA Error", e));
           }
-
-          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
-            .catch(e => console.error("[SURVIVAL] Memory save error (user):", e));
-          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
-            .catch(e => console.error("[SURVIVAL] Memory save error (assistant):", e));
-          
-          console.log("[SURVIVAL] Stream finished and saved.");
+          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent }).catch(() => {});
+          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text }).catch(() => {});
         } catch (e) {
-          console.error("[SURVIVAL] onFinish error:", e);
+          console.error("[onFinish Error]", e);
         }
-      }
+      },
     });
 
-    return result.toTextStreamResponse({ 
-      headers: { 
+    return result.toTextStreamResponse({
+      headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
-        "Cache-Control": "no-cache, no-store, must-revalidate"
-      } 
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+      },
     });
 
-  } catch (error: any) {
-    console.error("[SURVIVAL] CRITICAL ROUTE ERROR:", error);
-    return new Response(`ERRO CRÍTICO: ${error.message || "Erro desconhecido"}.`, { 
-      status: 200, 
-      headers: { "Content-Type": "text/plain; charset=utf-8" }
-    });
+  } catch (error: unknown) {
+    // CORRECÇÃO: status 500 em vez de 200 para o frontend detetar o erro
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[CHAT FATAL]", message);
+    return new Response(message, { status: 500 });
   }
 }
-

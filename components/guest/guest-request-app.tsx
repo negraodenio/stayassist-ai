@@ -111,34 +111,22 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     e.preventDefault();
     
     // LOG INDUSTRIAL PARA DIAGNÓSTICO
-    console.log("[CHAT DEBUG]", {
-      chatInput: chatInput.trim(),
-      chatLoading,
-      unit: unit?.name,
-      unitExists: !!unit,
-      sessionId,
-    });
-
     if (!chatInput.trim() || chatLoading || !unit) return;
 
-    const userMessageContent = chatInput.trim();
     const timestamp = Date.now();
     const userMessage: ChatMessage = {
       id: `user-${timestamp}`,
       role: "user",
-      content: userMessageContent,
+      content: chatInput.trim(),
     };
     const assistantId = `assistant-${timestamp + 1}`;
-    const assistantPlaceholder: ChatMessage = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      isRAG: false,
-    };
-
     const historySnapshot = chatMessages;
 
-    setChatMessages([...historySnapshot, userMessage, assistantPlaceholder]);
+    setChatMessages([
+      ...historySnapshot,
+      userMessage,
+      { id: assistantId, role: "assistant", content: "", isRAG: false },
+    ]);
     setChatInput("");
     setChatLoading(true);
 
@@ -151,18 +139,16 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     };
 
     const controller = new AbortController();
+    // CORRECÇÃO: timeout cobre apenas a ligação, é cancelado assim que o stream começa
     const connectionTimeout = setTimeout(() => controller.abort(), 20000);
-    let streamTimeout: NodeJS.Timeout | null = null;
 
     try {
-      console.log(`%c[CHAT FETCH] Turno: ${historySnapshot.length / 2 + 1}`, "color: blue; font-weight: bold;");
-      const response = await fetch(`/api/chat?t=${Date.now()}`, {
+      const response = await fetch("/api/chat", {
         method: "POST",
         signal: controller.signal,
-        keepalive: true,
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Cache-Control": "no-cache, no-store",
         },
         body: JSON.stringify({
           messages: [...historySnapshot, userMessage].map(({ role, content }) => ({
@@ -170,31 +156,18 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
             content,
           })),
           propertyId: unit.propertyId,
-          propertyName: unit.propertyName ?? "Hotel",
-          unitName: unit.name,
           sessionId,
           isGuest: true,
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`%c[CHAT ERROR] Server returned ${response.status}: ${errorText}`, "color: red;");
-        throw new Error(`HTTP ${response.status}`);
-      }
-      
-      // Conexão estabelecida: cancela o timeout inicial
-      console.log("%c[CHAT STREAM] Conexão aberta, lendo corpo...", "color: green;");
+      // CORRECÇÃO: cancela o timeout de ligação assim que a resposta chega
       clearTimeout(connectionTimeout);
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("Response body não disponível");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      // Timeout de segurança para a duração total da stream (30s)
-      streamTimeout = setTimeout(() => {
-        console.warn("[DEBUG] Stream timeout atingido. Forçando fecho do reader.");
-        reader.cancel().catch(console.error);
-      }, 30000);
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No reader");
 
       const decoder = new TextDecoder();
       let hasData = false;
@@ -202,46 +175,34 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       try {
         while (true) {
           const { done, value } = await reader.read();
-          if (done) {
-            console.log("[DEBUG] Stream finalizada normalmente (done: true)");
-            break;
-          }
-
+          if (done) break;
           const chunk = decoder.decode(value, { stream: true });
           if (chunk) {
             hasData = true;
             updateAssistant((prev) => prev + chunk);
           }
         }
-        
-        const finalChunk = decoder.decode();
-        if (finalChunk) {
-          hasData = true;
-          updateAssistant((prev) => prev + finalChunk);
-        }
+        // CORRECÇÃO: flush final do decoder
+        const final = decoder.decode();
+        if (final) updateAssistant((prev) => prev + final);
       } finally {
         reader.releaseLock();
       }
 
       if (!hasData) throw new Error("Stream vazio");
 
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-      console.error("[CHAT FATAL ERROR]", err);
-      
-      // LOG VISÍVEL NO CHAT PARA PWA
-      updateAssistant((prev) => 
-        prev + `\n\n[ERRO DIAGNÓSTICO]: ${errorMessage}\nO concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?`
+    } catch (err) {
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      // CORRECÇÃO: substitui conteúdo em vez de concatenar ao erro
+      updateAssistant(() =>
+        isAbort
+          ? "A ligação demorou demasiado. Tente novamente."
+          : "O concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?"
       );
     } finally {
       clearTimeout(connectionTimeout);
-      if (streamTimeout) clearTimeout(streamTimeout);
-      
-      // Pequeno delay para garantir que o React processou a última renderização da stream
-      setTimeout(() => {
-        setChatLoading(false);
-        console.log("[DEBUG] ChatLoading resetado via Timeout.");
-      }, 100);
+      // CORRECÇÃO: sem setTimeout artificial
+      setChatLoading(false);
     }
   }
 

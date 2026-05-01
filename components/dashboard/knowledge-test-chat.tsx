@@ -23,101 +23,86 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
     }
   }, [messages, debugInfo]);
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const textToSend = localInput.trim();
-    if (!textToSend || isLoading) return;
-    
-    const timestamp = Date.now();
-    const userMsg: LocalMessage = { id: `user-${timestamp}`, role: "user", content: textToSend };
-    const assistantMsgId = `assistant-${timestamp + 1}`;
-    
-    // Snapshot para evitar race conditions
-    const historySnapshot = messages;
-    
-    setMessages([...historySnapshot, userMsg, { id: assistantMsgId, role: "assistant", content: "" }]);
-    setLocalInput("");
-    setIsLoading(true);
-    setDebugInfo(null);
+const handleManualSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!localInput.trim() || isLoading) return;
 
-    const updateAssistant = (content: string) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.id === assistantMsgId ? { ...m, content } : m))
-      );
-    };
+  const timestamp = Date.now();
+  const userMsg = { id: `user-${timestamp}`, role: "user", content: localInput.trim() };
+  const assistantMsgId = `assistant-${timestamp + 1}`;
+  const historySnapshot = messages;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
+  setMessages([
+    ...historySnapshot,
+    userMsg,
+    { id: assistantMsgId, role: "assistant", content: "" },
+  ]);
+  setLocalInput("");
+  setIsLoading(true);
+
+  // CORRECÇÃO: updater funcional em vez de valor direto — evita race condition
+  const updateAssistant = (updater: (prev: string) => string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === assistantMsgId ? { ...m, content: updater(m.content) } : m
+      )
+    );
+  };
+
+  const controller = new AbortController();
+  // CORRECÇÃO: timeout único cobre ligação + stream completo (30s para admin)
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [...historySnapshot, userMsg].map(({ role, content }) => ({
+          role,
+          content,
+        })),
+        propertyId,
+        sessionId: "admin-debug",
+        isGuest: false,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No reader");
+
+    const decoder = new TextDecoder();
 
     try {
-      const response = await fetch(`/api/chat?t=${Date.now()}`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [...historySnapshot, userMsg].map(({ role, content }) => ({ role, content })),
-          propertyId,
-          unitName: "Admin Test",
-          sessionId: "admin-debug-session",
-          isGuest: false
-        }),
-      });
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      // Capturar debug do Survival Mode
-      const isRag = response.headers.get("X-Is-Rag") === "true";
-      if (isRag) {
-        setDebugInfo({ debug: { knowledge_used: "RAG Active", reranked: "Yes", memory_used: "Direct" } });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        // CORRECÇÃO: watchdog removido — controller.abort() já cobre o timeout
+        if (chunk) updateAssistant((prev) => prev + chunk);
       }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader available");
-
-      // WATCHDOG: Se não receber dados em 10s, abortar
-      const watchdog = setTimeout(() => {
-        console.warn("[ADMIN WATCHDOG] Stream stall detectado.");
-        reader.cancel().catch(console.error);
-      }, 10000);
-
-      const decoder = new TextDecoder();
-      let fullContent = "";
-      let hasData = false;
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          if (chunk) {
-            hasData = true;
-            clearTimeout(watchdog); // Primeiro dado recebido: desativar watchdog
-            fullContent += chunk;
-            updateAssistant(fullContent);
-          }
-        }
-        // Flush final
-        const final = decoder.decode();
-        if (final) {
-          fullContent += final;
-          updateAssistant(fullContent);
-        }
-      } finally {
-        clearTimeout(watchdog);
-        reader.releaseLock();
-      }
-
-      if (!hasData) throw new Error("O servidor não enviou conteúdo no stream.");
-
-    } catch (error: any) {
-      console.error("Admin Chat Error:", error);
-      updateAssistant(`Erro: ${error.message || "Erro desconhecido"}.`);
+      // CORRECÇÃO: flush final do decoder
+      const final = decoder.decode();
+      if (final) updateAssistant((prev) => prev + final);
     } finally {
-      clearTimeout(timeoutId);
-      setIsLoading(false);
+      reader.releaseLock();
     }
-  };
+
+  } catch (err) {
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    updateAssistant(() =>
+      isAbort
+        ? "Timeout — sem resposta em 30s."
+        : `Erro: ${err instanceof Error ? err.message : "desconhecido"}`
+    );
+  } finally {
+    clearTimeout(timeoutId);
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="flex flex-col h-[650px] rounded-[24px] border border-border bg-white overflow-hidden shadow-sm">
