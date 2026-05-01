@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const [propertiesRes, unitsRes, requestsRes, knowledgeRes] = await Promise.all([
     supabase
       .from("properties")
-      .select("id, name, organization_id")
+      .select("id, name, organization_id, address, latitude, longitude")
       .order("name", { ascending: true }),
     supabase.from("units").select("id", { count: "exact", head: true }),
     supabase

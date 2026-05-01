@@ -10,6 +10,7 @@ import { rerankChunks } from "@/lib/rerank";
 import { searchNearbyPlaces } from "@/lib/places";
 import { tool } from "ai";
 import { z } from "zod";
+import { createClient } from "@/utils/supabase/server";
 
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",

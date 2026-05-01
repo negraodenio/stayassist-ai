@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@/utils/supabase/server";
+
 
 export async function setupHotelAndUnits(prevState: unknown, formData: FormData) {
   const hotelName = formData.get("hotelName") as string;
@@ -76,7 +78,7 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
   return { success: true };
 }
 
-import { createClient } from "@/utils/supabase/server";
+
 
 // ─── Configuração RAG ──────────────────────────────────────────────────────────
 const CHUNK_SIZE = 500;       // tokens/palavras aproximadas por chunk
