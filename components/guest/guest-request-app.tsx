@@ -35,6 +35,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [sessionId] = useState(() => token || "guest-session-" + Math.random().toString(36).substring(7));
 
   const t = translations[lang];
 
@@ -139,7 +140,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
           propertyId: unit.propertyId,
           propertyName: unit.propertyName,
           unitName: unit.name,
-          sessionId: activeSession, // Use the stable activeSession state
+          sessionId: sessionId, // Use the stable sessionId state
           isGuest: true,
         }),
       });
