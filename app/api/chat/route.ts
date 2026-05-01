@@ -195,6 +195,8 @@ ${knowledgeContext || "No specific property context provided."}
 
     // 6. Return Pure Text Stream (resilient to PWA and multiple turns)
     const res = result as any;
+    const isReranked = !!(knowledgeContext && knowledgeContext.length > 0);
+    
     return res.toTextStreamResponse({ 
       headers: { 
         "Content-Type": "text/plain; charset=utf-8",
