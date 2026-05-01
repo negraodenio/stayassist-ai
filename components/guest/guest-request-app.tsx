@@ -116,12 +116,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: userMessageContent };
     const assistantId = (Date.now() + 1).toString();
     
-    setChatMessages(prev => [...prev, userMessage, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
+    // Maintain local copy for immediate API call to avoid state lag/duplication
+    const updatedMessages = [...chatMessages, userMessage];
+    setChatMessages([...updatedMessages, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
     setChatInput("");
     setChatLoading(true);
 
     try {
-      const sanitizedMessages = [...chatMessages, userMessage].map(m => ({
+      const sanitizedMessages = updatedMessages.map(m => ({
         role: m.role,
         content: m.content
       }));
@@ -130,14 +132,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Accept": "text/event-stream"
+          "Accept": "text/event-stream, text/plain"
         },
         body: JSON.stringify({
           messages: sanitizedMessages,
           propertyId: unit.propertyId,
           propertyName: unit.propertyName,
           unitName: unit.name,
-          sessionId: token || "guest-anonymous-session",
+          sessionId: activeSession, // Use the stable activeSession state
           isGuest: true,
         }),
       });
