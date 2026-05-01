@@ -110,21 +110,30 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
   async function handleChatSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const text = chatInput.trim();
-    if (!text || chatLoading || !unit?.propertyId) return;
-
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content: text };
-    const updatedMessages = [...chatMessages, userMsg];
-    setChatMessages(updatedMessages);
+    if (!chatInput.trim() || chatLoading || !unit) return;
+    
+    const userMessageContent = chatInput;
+    const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: userMessageContent };
+    const assistantId = (Date.now() + 1).toString();
+    
+    setChatMessages(prev => [...prev, userMessage, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
     setChatInput("");
     setChatLoading(true);
 
     try {
+      const sanitizedMessages = [...chatMessages, userMessage].map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream"
+        },
         body: JSON.stringify({
-          messages: updatedMessages,
+          messages: sanitizedMessages,
           propertyId: unit.propertyId,
           propertyName: unit.propertyName,
           unitName: unit.name,
@@ -135,25 +144,22 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
       if (!response.ok) throw new Error("Network error");
 
-      // Check RAG flag from header
       const isRAG = response.headers.get("X-Is-Rag") === "true";
+      if (isRAG) {
+        setChatMessages(prev => prev.map(m => m.id === assistantId ? { ...m, isRAG: true } : m));
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");
-
-      const assistantId = (Date.now() + 1).toString();
-      setChatMessages(prev => [...prev, { id: assistantId, role: "assistant", content: "", isRAG }]);
 
       const { parseAIStream } = await import("@/lib/stream-parser");
       let hasReceivedContent = false;
 
       await parseAIStream(reader, (content) => {
-        if (content.trim().length > 3) {
-          hasReceivedContent = true;
-          setChatMessages(prev =>
-            prev.map(m => m.id === assistantId ? { ...m, content } : m)
-          );
-        }
+        hasReceivedContent = true;
+        setChatMessages(prev =>
+          prev.map(m => m.id === assistantId ? { ...m, content } : m)
+        );
       });
 
       if (!hasReceivedContent) {
