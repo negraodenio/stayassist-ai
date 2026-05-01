@@ -28,14 +28,14 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   if (!localInput.trim() || isLoading) return;
 
   const timestamp = Date.now();
-  const userMsg = { id: `user-${timestamp}`, role: "user", content: localInput.trim() };
+  const userMsg = { id: `user-${timestamp}`, role: "user" as const, content: localInput.trim() };
   const assistantMsgId = `assistant-${timestamp + 1}`;
   const historySnapshot = messages;
 
   setMessages([
     ...historySnapshot,
     userMsg,
-    { id: assistantMsgId, role: "assistant", content: "" },
+    { id: assistantMsgId, role: "assistant" as const, content: "" },
   ]);
   setLocalInput("");
   setIsLoading(true);

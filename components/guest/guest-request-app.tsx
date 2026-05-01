@@ -125,7 +125,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     setChatMessages([
       ...historySnapshot,
       userMessage,
-      { id: assistantId, role: "assistant", content: "", isRAG: false },
+      { id: assistantId, role: "assistant" as const, content: "", isRAG: false },
     ]);
     setChatInput("");
     setChatLoading(true);
