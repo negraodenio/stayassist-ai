@@ -171,7 +171,7 @@ ${knowledgeContext || "No specific property context provided."}
       tools: {
         searchNearby: searchNearbyTool
       },
-      onFinish: ({ text }) => {
+      onFinish: ({ text }: any) => {
 
         // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
