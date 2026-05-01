@@ -41,6 +41,7 @@ interface DashboardProperty {
   address?: string;
   latitude?: number;
   longitude?: number;
+  zip_code?: string;
 }
 
 
@@ -358,18 +359,29 @@ export function DashboardShell({
                     }} className="flex flex-col gap-5">
                       <input type="hidden" name="propertyId" value={selectedPropertyId} />
                       
-                      <div>
-                        <label className="mb-2 block text-sm font-semibold text-navy">Full Address</label>
-                        <input
-                          name="address"
-                          type="text"
-                          defaultValue={selectedProperty?.address || ""}
-                          placeholder="e.g. Rua Augusta, 100, Lisboa"
-                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                        />
-                      </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">Full Address</label>
+                          <input
+                            name="address"
+                            type="text"
+                            defaultValue={selectedProperty?.address || ""}
+                            placeholder="e.g. Rua Augusta, 100, Lisboa"
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          />
+                        </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">CEP / Postal Code</label>
+                          <input
+                            name="zip_code"
+                            type="text"
+                            defaultValue={selectedProperty?.zip_code || ""}
+                            placeholder="e.g. 1200-000"
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="mb-2 block text-sm font-semibold text-navy">Latitude</label>
                           <input

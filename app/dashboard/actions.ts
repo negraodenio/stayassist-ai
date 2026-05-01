@@ -278,6 +278,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
 export async function updatePropertyLocation(prevState: unknown, formData: FormData) {
   const propertyId = formData.get("propertyId") as string;
   const address = formData.get("address") as string;
+  const zip_code = formData.get("zip_code") as string;
   const latitude = parseFloat(formData.get("latitude") as string);
   const longitude = parseFloat(formData.get("longitude") as string);
 
@@ -292,6 +293,7 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
       .from("properties")
       .update({
         address,
+        zip_code,
         latitude: isNaN(latitude) ? null : latitude,
         longitude: isNaN(longitude) ? null : longitude,
       })
