@@ -27,6 +27,7 @@ export async function POST(req: Request) {
     console.log("[RAG DEBUG] Request received:", JSON.stringify(body));
     const { messages: rawMessages, propertyId: rawPropertyId, propertyName, unitName, sessionId, isGuest } = body;
     const propertyId = rawPropertyId?.trim();
+    const activeSession = sessionId || "admin-test-session";
 
     // Teste de Conectividade Rápido
     if (rawMessages[rawMessages.length-1]?.content?.toLowerCase() === "ping") {
@@ -50,8 +51,6 @@ export async function POST(req: Request) {
 
     const userMessageContent = messages[messages.length - 1]?.content || "";
     
-    // Parâmetros da Sessão (Default fallback para testes admin)
-    const activeSession = sessionId || "admin-test-session";
     const userType = isGuest ? "guest" : "admin";
 
     // 2. Fetch Property Metadata (Geolocation & Address)
