@@ -57,77 +57,62 @@ export async function POST(req: Request) {
     const finalUnitName = unitName || "Room";
 
     // 2. Fetch Property Metadata (Geolocation & Address)
-    const supabase = await createClient();
-    const { data: propertyData } = await supabase
-      .from("properties")
-      .select("id, name, address, latitude, longitude")
-      .eq("id", propertyId)
-      .single();
-
-    const propLat = propertyData?.latitude;
-    const propLng = propertyData?.longitude;
-    const propAddress = propertyData?.address;
-
+    let propLat: number | null = null;
+    let propLng: number | null = null;
+    let propAddress = "";
     let knowledgeContext = "Nenhuma informação específica encontrada.";
-    let debugInfo = null;
     let sourcesUsed: string[] = [];
 
-    if (userMessageContent) {
-      try {
-        // 1. Single Embedding Generation (1536 dims)
-        const queryEmbedding = await generateQueryEmbedding(userMessageContent);
-
-        // 2. Parallel Retrieval (RAG only - history is handled by 'messages' array)
-        console.log(`[RAG DEBUG] Querying knowledge for property: ${propertyId}`);
-        const ragChunks = await getKnowledge(queryEmbedding, propertyId);
-
-        console.log(`[RAG DEBUG] RAG chunks found: ${ragChunks.length}`);
-
-        const combinedChunks = [
-          ...ragChunks.map((c: any) => {
-            if (c.source_file) sourcesUsed.push(c.source_file);
-            return c.content;
-          })
-        ];
-
-
-        // 3. Re-ranking (Restaurado para qualidade máxima)
-        const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
-
-        // 4. Token/Context Slicing (Max 4000 chars to avoid LLM limits/costs)
-        knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
-        console.log(`[RAG DEBUG] Context length: ${knowledgeContext.length}. First 100 chars: ${knowledgeContext.substring(0, 100)}`);
-        console.log(`[RAG DEBUG] Messages count: ${messages.length}`);
-        console.log(`[RAG DEBUG] RAG completion successful.`);
-
-        // Save Debug Info for Admin UI
-        debugInfo = {
-          memory_used: 0, // History is now handled natively by LLM messages
-          knowledge_used: ragChunks.length,
-          reranked: selectedChunks.length,
-        };
-
-        // Deduplicate sources string array
-        sourcesUsed = [...new Set(sourcesUsed)];
-
-      } catch (err) {
-        console.error("Enterprise RAG Error:", err);
+    try {
+      const supabase = await createClient();
+      const { data: propertyData } = await supabase
+        .from("properties")
+        .select("id, name, address, latitude, longitude")
+        .eq("id", propertyId)
+        .single();
+      
+      if (propertyData) {
+        propLat = propertyData.latitude;
+        propLng = propertyData.longitude;
+        propAddress = propertyData.address || "";
       }
+    } catch (e) {
+      console.error("[SURVIVAL] Metadata Fetch Error:", e);
     }
 
+    // 3. Knowledge Retrieval (RAG)
+    if (userMessageContent) {
+      try {
+        const queryEmbedding = await generateQueryEmbedding(userMessageContent);
+        const ragChunks = await getKnowledge(queryEmbedding, propertyId);
+        
+        if (ragChunks && ragChunks.length > 0) {
+          const combinedChunks = ragChunks.map((c: any) => {
+            if (c.source_file) sourcesUsed.push(c.source_file);
+            return c.content;
+          });
+          const selectedChunks = await rerankChunks(userMessageContent, combinedChunks);
+          knowledgeContext = selectedChunks.join("\n\n---\n\n").slice(0, 4000);
+        }
+      } catch (e) {
+        console.error("[SURVIVAL] RAG Error:", e);
+      }
+    }
 
     const systemPrompt = `You are StayAssist AI, a premium 5-star hotel concierge. 
 Your goal is to provide accurate information based ONLY on the provided context for property-specific questions.
 
-CORE DIRECTIVES:
-1. PROPERTY INFO: Use the CONTEXT below for rules, Wi-Fi, schedules, and specific hotel amenities.
-2. HOTEL LOCATION: The hotel is located at: ${propAddress || "Address not set in dashboard"}.
-3. LOCAL RECOMMENDATIONS: If a guest asks for restaurants, cafes, or attractions, use the 'searchNearby' tool to get real-time data from Google Places.
-4. HONESTY: If the CONTEXT does not contain a specific hotel-related answer and it's not something you can search on Google Places, say exactly: "O concierge está ocupado no momento. Por favor, tente novamente em instantes."
-5. TONE: Professional, welcoming, and concise.
+HOTEL: ${finalPropertyName}
+UNIT: ${finalUnitName}
+LOCATION: ${propAddress || "Address not set"}
 
 CONTEXT:
-${knowledgeContext || "No specific property context provided."}
+${knowledgeContext}
+
+DIRETRIZES:
+1. Seja cordial e profissional.
+2. Utilize o CONTEXTO acima para responder sobre o hotel.
+3. Se a informação não estiver no contexto, ofereça ajuda via WhatsApp ou diga que não sabe.
 `;
 
     const customHeaders = {
@@ -164,55 +149,52 @@ ${knowledgeContext || "No specific property context provided."}
       }
     };
 
-    // 6. LLM Streaming (Pure Text Mode for maximum compatibility)
+    // 6. LLM Streaming (Survival Mode)
+    console.log("[SURVIVAL] Starting stream...");
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
-      onFinish: ({ text }: any) => {
-        // WhatsApp Alert (Async)
-        if (isGuest && userMessageContent) {
-          sendRequestWhatsAppAlert({
-            id: "chat-escalation",
-            propertyId,
-            property: propertyName || unitName || "StayAssist Guest",
-            unitId: "chat",
-            room: unitName || "Guest",
-            type: "help" as any,
-            status: "Open",
-            createdAt: new Date().toISOString(),
-            guestMessage: userMessageContent,
-          } as any).catch(e => console.error("WhatsApp error:", e));
-        }
+      onFinish: async ({ text }) => {
+        try {
+          // WhatsApp Alert (Async)
+          if (isGuest && userMessageContent) {
+            sendRequestWhatsAppAlert({
+              id: "chat-escalation",
+              propertyId,
+              property: propertyName || unitName || "StayAssist Guest",
+              unitId: "chat",
+              room: unitName || "Guest",
+              type: "help" as any,
+              status: "Open",
+              createdAt: new Date().toISOString(),
+              guestMessage: userMessageContent,
+            } as any).catch(e => console.error("[SURVIVAL] WhatsApp error:", e));
+          }
 
-        // 7. Save Memory
-        if (userMessageContent) {
-          saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
-            .catch(e => console.error("Memory save error (user):", e));
+          // Save Memory
+          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
+            .catch(e => console.error("[SURVIVAL] Memory save error (user):", e));
+          await saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
+            .catch(e => console.error("[SURVIVAL] Memory save error (assistant):", e));
+        } catch (e) {
+          console.error("[SURVIVAL] onFinish internal error:", e);
         }
-        saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
-          .catch(e => console.error("Memory save error (assistant):", e));
       }
-    } as any);
+    });
 
-    // 6. Return Pure Text Stream (resilient to PWA and multiple turns)
-    const res = result as any;
-    const isReranked = !!(knowledgeContext && knowledgeContext.length > 0);
-    
-    return res.toTextStreamResponse({ 
+    return result.toTextStreamResponse({ 
       headers: { 
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store, no-cache, must-revalidate",
-        "X-Is-Rag": isReranked ? "true" : "false"
+        "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false"
       } 
     });
 
-
   } catch (error: any) {
-    console.error("CRITICAL Chat route error:", error);
-    // Retorna o erro como texto para diagnóstico no PWA
-    return new Response(`Erro do Servidor: ${error.message || "Erro desconhecido"}. Por favor, avise o suporte.`, { 
-      status: 200, // Status 200 para garantir que o PWA mostre a bolha com o erro
+    console.error("[SURVIVAL] CRITICAL ROUTE ERROR:", error);
+    return new Response(`ERRO: ${error.message || "Erro desconhecido"}.`, { 
+      status: 200, 
       headers: { "Content-Type": "text/plain; charset=utf-8" }
     });
   }
