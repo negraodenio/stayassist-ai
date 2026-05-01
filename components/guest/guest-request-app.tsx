@@ -286,6 +286,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               {[
+                { id: "emergency", label: t.emergency, desc: t.emergencyDesc, isUrgent: true },
                 { id: "towels", label: t.towels, desc: t.towelsDesc },
                 { id: "cleaning", label: t.cleaning, desc: t.cleaningDesc },
                 { id: "issue", label: t.issue, desc: t.issueDesc },
@@ -296,19 +297,26 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                   type="button"
                   onClick={() => handleCreateRequest(card.id as GuestRequestType)}
                   disabled={state === "saving" || state === "loading" || !unit}
-                  className="group rounded-[26px] border border-border bg-white/82 p-5 text-left transition hover:-translate-y-0.5 hover:border-accent hover:bg-white disabled:cursor-not-allowed disabled:opacity-55"
+                  className={`group rounded-[26px] border p-5 text-left transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55 ${
+                    card.isUrgent 
+                      ? "border-red-200 bg-red-50/50 hover:bg-red-50 hover:border-red-400 luxury-ring-red" 
+                      : "border-border bg-white/82 hover:border-accent hover:bg-white luxury-ring"
+                  }`}
                 >
-                  <h3 className="font-display text-2xl text-navy">
+                  <h3 className={`font-display text-2xl ${card.isUrgent ? "text-red-700" : "text-navy"}`}>
                     {card.label}
                   </h3>
                   <p className="mt-2 text-xs leading-6 text-muted">
                     {card.desc}
                   </p>
-                  <span className="mt-5 inline-flex rounded-full bg-navy px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition group-hover:bg-[#1c4755]">
+                  <span className={`mt-5 inline-flex rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white transition ${
+                    card.isUrgent ? "bg-red-600 hover:bg-red-700" : "bg-navy hover:bg-[#1c4755]"
+                  }`}>
                     {pendingType === card.id ? t.creating : t.createRequest}
                   </span>
                 </button>
               ))}
+
             </div>
           </section>
 

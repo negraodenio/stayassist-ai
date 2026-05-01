@@ -11,7 +11,9 @@ const requestMessageByType: Record<GuestRequestType, string> = {
   cleaning: "Please schedule room cleaning.",
   issue: "I need help with an issue in the unit.",
   help: "I would like concierge assistance.",
+  emergency: "EMERGENCY: I need immediate assistance!",
 };
+
 
 export async function listGuestOptions(): Promise<{
   organizations: GuestOrganization[];
@@ -209,6 +211,8 @@ export async function createGuestRequest(input: {
   unitId: string;
   type: GuestRequestType;
 }) {
+  const priority = input.type === "emergency" ? "high" : "normal";
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("requests")
@@ -218,7 +222,7 @@ export async function createGuestRequest(input: {
       unit_id: input.unitId,
       category: input.type,
       status: "Open",
-      priority: "normal",
+      priority: priority,
       guest_name: "Guest",
       guest_message: requestMessageByType[input.type],
     })

@@ -1,4 +1,5 @@
-export type GuestRequestType = "towels" | "cleaning" | "issue" | "help";
+export type GuestRequestType = "towels" | "cleaning" | "issue" | "help" | "emergency";
+
 
 export type GuestRequestStatus = "Open" | "In progress" | "Resolved";
 
@@ -34,21 +35,27 @@ export const requestTypeLabels: Record<GuestRequestType, string> = {
   cleaning: "Room cleaning",
   issue: "Report an issue",
   help: "Concierge help",
+  emergency: "EMERGENCY",
 };
+
 
 export const requestTypeDescriptions: Record<GuestRequestType, string> = {
   towels: "Ask housekeeping to bring premium fresh towels to your room.",
   cleaning: "Request a refresh, turndown, or full room service visit.",
   issue: "Let the team know about maintenance, comfort, or access issues.",
   help: "Reach concierge for bookings, transfers, amenities, or local support.",
+  emergency: "Urgent assistance required. Contacting staff immediately.",
 };
+
 
 export const requestTypeIntents: Record<GuestRequestType, string> = {
   towels: "Housekeeping",
   cleaning: "Service",
   issue: "Ops alert",
   help: "Concierge",
+  emergency: "HIGH ALERT",
 };
+
 
 export const fallbackUnits: GuestUnit[] = [
   {

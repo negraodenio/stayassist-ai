@@ -74,6 +74,13 @@ input {
     0 16px 36px rgba(32, 18, 7, 0.1);
 }
 
+.luxury-ring-red {
+  box-shadow:
+    0 0 0 1px rgba(220, 38, 38, 0.2),
+    0 16px 36px rgba(153, 27, 27, 0.1);
+}
+
+
 .section-grid {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
