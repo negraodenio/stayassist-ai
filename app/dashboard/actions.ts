@@ -279,10 +279,32 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
   const propertyId = formData.get("propertyId") as string;
   const address = formData.get("address") as string;
   const zip_code = formData.get("zip_code") as string;
-  const latitude = parseFloat(formData.get("latitude") as string);
-  const longitude = parseFloat(formData.get("longitude") as string);
+  let latitude = parseFloat(formData.get("latitude") as string);
+  let longitude = parseFloat(formData.get("longitude") as string);
 
   if (!propertyId) return { error: "Property ID missing." };
+
+  // Automagicamente buscar lat/long pelo CEP se estiverem vazios
+  if (zip_code && (isNaN(latitude) || isNaN(longitude))) {
+    try {
+      console.log(`[GEOCODE] Buscando coordenadas para o CEP: ${zip_code}`);
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(zip_code)}&key=${process.env.GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
+      
+      if (data.status === "OK" && data.results[0]) {
+        const { lat, lng } = data.results[0].geometry.location;
+        latitude = lat;
+        longitude = lng;
+        console.log(`[GEOCODE] Sucesso: ${lat}, ${lng}`);
+      } else {
+        console.warn(`[GEOCODE] Google retornou status: ${data.status}`);
+      }
+    } catch (e) {
+      console.error("[GEOCODE] Erro na consulta:", e);
+    }
+  }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -300,7 +322,13 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
       .eq("id", propertyId)
       .eq("user_id", user.id);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Error:", error);
+      if (error.message?.includes("column \"zip_code\" does not exist")) {
+        return { error: "Erro de Base de Dados: Precisas de adicionar a coluna 'zip_code' no Supabase SQL Editor." };
+      }
+      throw error;
+    }
 
     revalidatePath("/dashboard", "layout");
     return { success: true };
