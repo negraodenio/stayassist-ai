@@ -162,10 +162,17 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
     } catch (err) {
       console.error("Chat error:", err);
-      setChatMessages(prev => [...prev, { id: Date.now().toString(), role: "assistant", content: "Sorry, I'm having trouble connecting. Please try again." }]);
+      const errorId = (Date.now() + 2).toString();
+      setChatMessages(prev => [...prev, { 
+        id: errorId, 
+        role: "assistant", 
+        content: "ERROR_FALLBACK", 
+        isRAG: false 
+      }]);
     } finally {
       setChatLoading(false);
     }
+
   }
 
   async function refreshRequests() {
@@ -387,17 +394,43 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                           className={`rounded-[22px] px-5 py-3 text-sm leading-7 shadow-sm ${
                             m.role === "user"
                               ? "bg-navy text-white rounded-tr-none"
+                              : m.content === "ERROR_FALLBACK" || m.content.includes("concierge está ocupado")
+                              ? "bg-red-50 border border-red-100 text-red-900 rounded-tl-none"
                               : "bg-white border border-border text-navy rounded-tl-none"
                           }`}
                         >
-                          {m.content}
+                          {m.content === "ERROR_FALLBACK" || m.content.includes("concierge está ocupado") ? (
+                            <div className="flex flex-col gap-4">
+                              <p className="font-semibold text-red-800">
+                                {lang === "pt" 
+                                  ? "O concierge está muito solicitado agora." 
+                                  : "The concierge is very busy right now."}
+                              </p>
+                              <p className="text-xs opacity-80 leading-5">
+                                {lang === "pt"
+                                  ? "Gostaria de falar diretamente com a nossa equipa via WhatsApp?"
+                                  : "Would you like to speak directly with our team via WhatsApp?"}
+                              </p>
+                              <a 
+                                href={`https://wa.me/5511999999999?text=${encodeURIComponent("Olá, estou no " + (unit?.propertyName || "Hotel") + " e preciso de ajuda.")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs font-bold text-white transition hover:scale-[1.02] active:scale-95"
+                              >
+                                <Smartphone size={14} /> WhatsApp Support
+                              </a>
+                            </div>
+                          ) : (
+                            m.content
+                          )}
                         </div>
                         {/* Trust Badge para RAG */}
-                        {m.role === "assistant" && m.isRAG && (
+                        {m.role === "assistant" && m.isRAG && m.content !== "ERROR_FALLBACK" && !m.content.includes("concierge está ocupado") && (
                           <div className="flex items-center gap-1 text-[10px] text-muted/70 pl-3">
                             <CheckCircle2 size={10} /> Based on property information
                           </div>
                         )}
+
                       </div>
                     </div>
                   ))
@@ -407,11 +440,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-strong text-white shadow-sm">
                       <Bot size={14} />
                     </div>
-                    <div className="animate-pulse rounded-[22px] border border-border bg-white px-5 py-3 text-sm text-muted shadow-sm rounded-tl-none">
-                      {t.aiThinking}
+                    <div className="flex items-center gap-1.5 rounded-[22px] border border-border bg-white px-5 py-4 shadow-sm rounded-tl-none">
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent-strong [animation-delay:-0.3s]"></div>
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent-strong [animation-delay:-0.15s]"></div>
+                      <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-accent-strong"></div>
                     </div>
                   </div>
                 )}
+
                 <div ref={messagesEndRef} />
               </div>
             </div>
