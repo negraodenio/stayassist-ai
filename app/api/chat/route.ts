@@ -162,10 +162,8 @@ ${knowledgeContext || "No specific property context provided."}
       }
     };
 
-    // 6. LLM Streaming with Tools (Blindado para Multi-step)
-    console.log(`[RAG DEBUG] Starting stream with stable model and tools: openai/gpt-4o-mini`);
-    
-    const streamConfig: any = {
+    // 6. LLM Streaming with Tools (Rock-stable version)
+    const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
@@ -178,7 +176,7 @@ ${knowledgeContext || "No specific property context provided."}
         if (isGuest && userMessageContent) {
           sendRequestWhatsAppAlert({
             id: "chat-escalation",
-            propertyId: propertyId,
+            propertyId,
             property: propertyName || unitName || "StayAssist Guest",
             unitId: "chat",
             room: unitName || "Guest",
@@ -189,7 +187,7 @@ ${knowledgeContext || "No specific property context provided."}
           } as any).catch(e => console.error("WhatsApp error:", e));
         }
 
-        // 7. Save Memory (Restaurado)
+        // 7. Save Memory
         if (userMessageContent) {
           saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
             .catch(e => console.error("Memory save error (user):", e));
@@ -197,17 +195,14 @@ ${knowledgeContext || "No specific property context provided."}
         saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
           .catch(e => console.error("Memory save error (assistant):", e));
       }
-    };
+    } as any);
 
-    const result = await streamText(streamConfig);
-
-    // 6. Return standard DataStream
+    // 6. Return standard DataStream with cache-busting
     const res = result as any;
     const responseHeaders = { 
       ...customHeaders,
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0"
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "Pragma": "no-cache"
     };
 
     if (typeof res.toDataStreamResponse === 'function') {
