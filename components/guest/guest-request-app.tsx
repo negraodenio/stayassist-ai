@@ -107,40 +107,60 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages, chatLoading]);
-
-  async function handleChatSubmit(e: React.FormEvent) {
+  }, [chatMessages, chatLoading]);  async function handleChatSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!chatInput.trim() || chatLoading || !unit) return;
 
-    const userMessageContent = chatInput;
-    const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: userMessageContent };
-    const assistantId = (Date.now() + 1).toString();
-    
-    const currentHistory = [...chatMessages];
-    setChatMessages([...currentHistory, userMessage, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
+    const userMessageContent = chatInput.trim();
+    const timestamp = Date.now();
+    const userMessage: ChatMessage = {
+      id: `user-${timestamp}`,
+      role: "user",
+      content: userMessageContent,
+    };
+    const assistantId = `assistant-${timestamp + 1}`;
+    const assistantPlaceholder: ChatMessage = {
+      id: assistantId,
+      role: "assistant",
+      content: "",
+      isRAG: false,
+    };
+
+    // Snapshot do histórico ANTES de qualquer setState para evitar stale closures
+    const historySnapshot = chatMessages;
+
+    setChatMessages([...historySnapshot, userMessage, assistantPlaceholder]);
     setChatInput("");
     setChatLoading(true);
 
-    try {
-      const sanitizedMessages = [...currentHistory, userMessage].map(m => ({
-        role: m.role,
-        content: m.content
-      }));
+    const updateAssistant = (updater: (prev: string) => string) => {
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId ? { ...m, content: updater(m.content) } : m
+        )
+      );
+    };
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+
+    try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { 
+        signal: controller.signal,
+        headers: {
           "Content-Type": "application/json",
-          "Accept": "text/event-stream, text/plain",
-          "Cache-Control": "no-cache"
+          "Cache-Control": "no-cache",
         },
         body: JSON.stringify({
-          messages: sanitizedMessages,
+          messages: [...historySnapshot, userMessage].map(({ role, content }) => ({
+            role,
+            content,
+          })),
           propertyId: unit.propertyId,
-          propertyName: unit.propertyName || "Hotel",
+          propertyName: unit.propertyName ?? "Hotel",
           unitName: unit.name,
-          sessionId: sessionId,
+          sessionId,
           isGuest: true,
         }),
       });
@@ -148,47 +168,44 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader");
+      if (!reader) throw new Error("Response body não disponível");
 
       const decoder = new TextDecoder();
-      let accumulatedText = "";
-      let hasReceivedAnyContent = false;
+      let hasData = false;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        if (chunk) {
-          hasReceivedAnyContent = true;
-          // Clean prefixes if DataStream format is used (0:", 1:", etc)
-          const cleanChunk = chunk.startsWith('0:"') 
-            ? chunk.replace(/^0:"/, "").replace(/"$/, "").replace(/\\n/g, "\n") 
-            : chunk;
-          
-          accumulatedText += cleanChunk;
-          
-          setChatMessages(prev =>
-            prev.map(m => m.id === assistantId ? { ...m, content: accumulatedText } : m)
-          );
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) {
+            hasData = true;
+            updateAssistant((prev) => prev + chunk);
+          }
         }
+        
+        // Flush final do decoder para libertar bytes pendentes
+        const finalChunk = decoder.decode();
+        if (finalChunk) {
+          hasData = true;
+          updateAssistant((prev) => prev + finalChunk);
+        }
+      } finally {
+        reader.releaseLock();
       }
 
-      if (!hasReceivedAnyContent) throw new Error("Empty stream");
+      if (!hasData) throw new Error("Stream vazio");
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("[CHAT FATAL ERROR]", err);
-      setChatMessages(prev =>
-        prev.map(m => m.id === assistantId ? { 
-          ...m, 
-          content: "O concierge está muito solicitado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?" 
-        } : m)
-      );
+      updateAssistant(() => "O concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?");
     } finally {
+      clearTimeout(timeoutId);
       setChatLoading(false);
     }
-
   }
+ }
 
   async function refreshRequests() {
     if (!unit) return;
