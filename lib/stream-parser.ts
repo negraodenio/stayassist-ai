@@ -21,7 +21,7 @@ export async function parseAIStream(
   let lineBuffer = "";
   let accumulatedContent = "";
   let hasDataStreamLines = false;
-
+  function processLine(line: string) {
     const technicalPrefixes = ["1:", "2:", "3:", "4:", "5:", "6:", "7:", "8:", "9:", "a:", "b:", "c:", "d:", "e:", "f:"];
     const isTechnical = technicalPrefixes.some(p => line.startsWith(p));
 
@@ -36,11 +36,12 @@ export async function parseAIStream(
     } else if (isTechnical) {
       hasDataStreamLines = true;
       // Skip metadata/tool markers — no text to extract for the user
-    } else if (!hasDataStreamLines) {
+    } else if (!hasDataStreamLines && line.trim()) {
       // Robust Fallback: only treat as raw text if we haven't detected a DataStream protocol yet
       accumulatedContent += line + "\n";
       onContent(accumulatedContent);
     }
+  }
 
   let done = false;
   while (!done) {
