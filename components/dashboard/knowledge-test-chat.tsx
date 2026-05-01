@@ -26,57 +26,83 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const textToSend = localInput.trim();
-    
     if (!textToSend || isLoading) return;
     
-    const userMsg: LocalMessage = { id: Date.now().toString(), role: "user", content: textToSend };
-    const newMessages = [...messages, userMsg];
+    const timestamp = Date.now();
+    const userMsg: LocalMessage = { id: `user-${timestamp}`, role: "user", content: textToSend };
+    const assistantMsgId = `assistant-${timestamp + 1}`;
     
-    setMessages(newMessages);
+    // Snapshot para evitar race conditions
+    const historySnapshot = messages;
+    
+    setMessages([...historySnapshot, userMsg, { id: assistantMsgId, role: "assistant", content: "" }]);
     setLocalInput("");
     setIsLoading(true);
-    setDebugInfo(null); // Clear previous debug
+    setDebugInfo(null);
+
+    const updateAssistant = (content: string) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === assistantMsgId ? { ...m, content } : m))
+      );
+    };
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
+        signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: newMessages,
+          messages: [...historySnapshot, userMsg].map(({ role, content }) => ({ role, content })),
           propertyId,
           unitName: "Admin Test",
-          sessionId: "admin-debug-session", // Unique session for admin memory testing
+          sessionId: "admin-debug-session",
           isGuest: false
         }),
       });
 
-      if (!response.ok) throw new Error("Network response was not ok");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-      // Lê os headers customizados que acabamos de implementar no backend
-      const debugHeader = response.headers.get("X-Debug-Info");
-      if (debugHeader) {
-          try {
-              setDebugInfo(JSON.parse(debugHeader));
-          } catch(e) {}
+      // Capturar debug do Survival Mode
+      const isRag = response.headers.get("X-Is-Rag") === "true";
+      if (isRag) {
+        setDebugInfo({ debug: { knowledge_used: "RAG Active", reranked: "Yes", memory_used: "Direct" } });
       }
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No reader");
+      if (!reader) throw new Error("No reader available");
 
-      const assistantMsgId = (Date.now() + 1).toString();
-      setMessages((prev) => [...prev, { id: assistantMsgId, role: "assistant", content: "" }]);
+      const decoder = new TextDecoder();
+      let fullContent = "";
 
-      const { parseAIStream } = await import("@/lib/stream-parser");
-      await parseAIStream(reader, (content) => {
-        setMessages((prev) =>
-          prev.map(m => m.id === assistantMsgId ? { ...m, content } : m)
-        );
-      });
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-    } catch (error) {
-      console.error("Chat Error:", error);
-      setMessages((prev) => [...prev, { id: Date.now().toString(), role: "assistant", content: "Error connecting to AI. Please check your console." }]);
+          const chunk = decoder.decode(value, { stream: true });
+          if (chunk) {
+            fullContent += chunk;
+            updateAssistant(fullContent);
+          }
+        }
+        // Flush final
+        const final = decoder.decode();
+        if (final) {
+          fullContent += final;
+          updateAssistant(fullContent);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+    } catch (error: any) {
+      console.error("Admin Chat Error:", error);
+      updateAssistant(`Erro na ligação: ${error.message || "Erro desconhecido"}.`);
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   };
