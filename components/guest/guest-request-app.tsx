@@ -112,19 +112,18 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   async function handleChatSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!chatInput.trim() || chatLoading || !unit) return;
-    
+
     const userMessageContent = chatInput;
     const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: userMessageContent };
     const assistantId = (Date.now() + 1).toString();
     
-    // Maintain local copy for immediate API call to avoid state lag/duplication
-    const updatedMessages = [...chatMessages, userMessage];
-    setChatMessages([...updatedMessages, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
+    const currentHistory = [...chatMessages];
+    setChatMessages([...currentHistory, userMessage, { id: assistantId, role: "assistant", content: "", isRAG: false }]);
     setChatInput("");
     setChatLoading(true);
 
     try {
-      const sanitizedMessages = updatedMessages.map(m => ({
+      const sanitizedMessages = [...currentHistory, userMessage].map(m => ({
         role: m.role,
         content: m.content
       }));
@@ -133,56 +132,58 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Accept": "text/event-stream, text/plain"
+          "Accept": "text/event-stream, text/plain",
+          "Cache-Control": "no-cache"
         },
         body: JSON.stringify({
           messages: sanitizedMessages,
           propertyId: unit.propertyId,
-          propertyName: unit.propertyName,
+          propertyName: unit.propertyName || "Hotel",
           unitName: unit.name,
-          sessionId: sessionId, // Use the stable sessionId state
+          sessionId: sessionId,
           isGuest: true,
         }),
       });
 
-      if (!response.ok) throw new Error("Network error");
-
-      const isRAG = response.headers.get("X-Is-Rag") === "true";
-      if (isRAG) {
-        setChatMessages(prev => prev.map(m => m.id === assistantId ? { ...m, isRAG: true } : m));
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body");
+      if (!reader) throw new Error("No reader");
 
-      const { parseAIStream } = await import("@/lib/stream-parser");
-      let hasReceivedContent = false;
+      const decoder = new TextDecoder();
+      let accumulatedText = "";
+      let hasReceivedAnyContent = false;
 
-      await parseAIStream(reader, (content) => {
-        hasReceivedContent = true;
-        setChatMessages(prev =>
-          prev.map(m => m.id === assistantId ? { ...m, content } : m)
-        );
-      });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      if (!hasReceivedContent) {
-        setChatMessages(prev =>
-          prev.map(m => m.id === assistantId ? { 
-            ...m, 
-            content: "O concierge está muito solicitado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?" 
-          } : m)
-        );
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) {
+          hasReceivedAnyContent = true;
+          // Clean prefixes if DataStream format is used (0:", 1:", etc)
+          const cleanChunk = chunk.startsWith('0:"') 
+            ? chunk.replace(/^0:"/, "").replace(/"$/, "").replace(/\\n/g, "\n") 
+            : chunk;
+          
+          accumulatedText += cleanChunk;
+          
+          setChatMessages(prev =>
+            prev.map(m => m.id === assistantId ? { ...m, content: accumulatedText } : m)
+          );
+        }
       }
 
+      if (!hasReceivedAnyContent) throw new Error("Empty stream");
+
     } catch (err) {
-      console.error("Chat error:", err);
-      const errorId = (Date.now() + 2).toString();
-      setChatMessages(prev => [...prev, { 
-        id: errorId, 
-        role: "assistant", 
-        content: "ERROR_FALLBACK", 
-        isRAG: false 
-      }]);
+      console.error("[CHAT FATAL ERROR]", err);
+      setChatMessages(prev =>
+        prev.map(m => m.id === assistantId ? { 
+          ...m, 
+          content: "O concierge está muito solicitado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?" 
+        } : m)
+      );
     } finally {
       setChatLoading(false);
     }
