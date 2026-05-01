@@ -39,6 +39,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   ]);
   setLocalInput("");
   setIsLoading(true);
+  // @ts-ignore
+  window.__CHAT_LOADING_ADMIN__ = true;
 
   // CORRECÇÃO: updater funcional em vez de valor direto — evita race condition
   const updateAssistant = (updater: (prev: string) => string) => {
@@ -101,6 +103,8 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   } finally {
     clearTimeout(timeoutId);
     setIsLoading(false);
+    // @ts-ignore
+    window.__CHAT_LOADING_ADMIN__ = false;
   }
 };
 
