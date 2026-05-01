@@ -1,11 +1,15 @@
 import { streamText } from "ai";
-import { openrouter } from "@ai-sdk/openrouter";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createClient } from "@/utils/supabase/server";
 import { saveMemory } from "@/lib/memory";
 import { generateQueryEmbedding } from "@/lib/embeddings";
 import { getKnowledge } from "@/lib/rag";
 import { rerankChunks } from "@/lib/rerank";
 import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
+
+const openrouter = createOpenRouter({
+  apiKey: process.env.OPENROUTER_API_KEY,
+});
 
 export const maxDuration = 30;
 
@@ -18,7 +22,6 @@ export async function POST(req: Request) {
 
     if (!propertyId) return new Response("Missing propertyId", { status: 400 });
 
-    // CORRECÇÃO: filtro robusto — rejeita conteúdo vazio que quebra o OpenRouter
     const messages = (rawMessages || [])
       .filter((m: any) =>
         m &&
@@ -61,7 +64,6 @@ export async function POST(req: Request) {
         const queryEmbedding = await generateQueryEmbedding(userMessageContent);
         const ragChunks = await getKnowledge(queryEmbedding, propertyId);
         if (ragChunks?.length > 0) {
-          // CORRECÇÃO: link markdown corrompido removido
           const combined = ragChunks.map((c: any) => {
             if (c.source_file) sourcesUsed.push(c.source_file);
             return c.content;
@@ -106,7 +108,24 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
       },
     });
 
-    return result.toTextStreamResponse({
+    // CORRECÇÃO PRINCIPAL: ReadableStream manual garante controller.close() explícito
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of result.textStream) {
+            controller.enqueue(encoder.encode(chunk));
+          }
+        } catch (e) {
+          console.error("[Stream Error]", e);
+          controller.error(e);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
@@ -115,7 +134,6 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
     });
 
   } catch (error: unknown) {
-    // CORRECÇÃO: status 500 em vez de 200 para o frontend detetar o erro
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[CHAT FATAL]", message);
     return new Response(message, { status: 500 });
