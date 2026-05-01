@@ -151,15 +151,15 @@ DIRETRIZES:
       }
     };
 
-    // 6. LLM Streaming (Survival Mode)
-    console.log("[SURVIVAL] Starting stream...");
+    // 6. LLM Streaming (Survival Mode - Low Level)
+    console.log("[SURVIVAL] Requesting LLM stream...");
+    
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
       onFinish: async ({ text }) => {
         try {
-          // WhatsApp Alert (Async)
           if (isGuest && userMessageContent) {
             sendRequestWhatsAppAlert({
               id: "chat-escalation",
@@ -174,13 +174,14 @@ DIRETRIZES:
             } as any).catch(e => console.error("[SURVIVAL] WhatsApp error:", e));
           }
 
-          // Save Memory
           await saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent })
             .catch(e => console.error("[SURVIVAL] Memory save error (user):", e));
           await saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
             .catch(e => console.error("[SURVIVAL] Memory save error (assistant):", e));
+          
+          console.log("[SURVIVAL] Stream finished and saved.");
         } catch (e) {
-          console.error("[SURVIVAL] onFinish internal error:", e);
+          console.error("[SURVIVAL] onFinish error:", e);
         }
       }
     });
@@ -188,14 +189,14 @@ DIRETRIZES:
     return result.toTextStreamResponse({ 
       headers: { 
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-        "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false"
+        "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
+        "Cache-Control": "no-cache, no-store, must-revalidate"
       } 
     });
 
   } catch (error: any) {
     console.error("[SURVIVAL] CRITICAL ROUTE ERROR:", error);
-    return new Response(`ERRO: ${error.message || "Erro desconhecido"}.`, { 
+    return new Response(`ERRO CRÍTICO: ${error.message || "Erro desconhecido"}.`, { 
       status: 200, 
       headers: { "Content-Type": "text/plain; charset=utf-8" }
     });

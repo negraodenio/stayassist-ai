@@ -50,7 +50,7 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`/api/chat?t=${Date.now()}`, {
         method: "POST",
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
@@ -74,8 +74,15 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No reader available");
 
+      // WATCHDOG: Se não receber dados em 10s, abortar
+      const watchdog = setTimeout(() => {
+        console.warn("[ADMIN WATCHDOG] Stream stall detectado.");
+        reader.cancel().catch(console.error);
+      }, 10000);
+
       const decoder = new TextDecoder();
       let fullContent = "";
+      let hasData = false;
 
       try {
         while (true) {
@@ -84,6 +91,8 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
 
           const chunk = decoder.decode(value, { stream: true });
           if (chunk) {
+            hasData = true;
+            clearTimeout(watchdog); // Primeiro dado recebido: desativar watchdog
             fullContent += chunk;
             updateAssistant(fullContent);
           }
@@ -95,12 +104,15 @@ export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
           updateAssistant(fullContent);
         }
       } finally {
+        clearTimeout(watchdog);
         reader.releaseLock();
       }
 
+      if (!hasData) throw new Error("O servidor não enviou conteúdo no stream.");
+
     } catch (error: any) {
       console.error("Admin Chat Error:", error);
-      updateAssistant(`Erro na ligação: ${error.message || "Erro desconhecido"}.`);
+      updateAssistant(`Erro: ${error.message || "Erro desconhecido"}.`);
     } finally {
       clearTimeout(timeoutId);
       setIsLoading(false);
