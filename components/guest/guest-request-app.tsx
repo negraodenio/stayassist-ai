@@ -227,18 +227,22 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       if (!hasData) throw new Error("Stream vazio");
 
     } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") {
-        console.error("[DEBUG] Timeout atingido!");
-        updateAssistant(() => "O concierge está a demorar mais do que o habitual. Por favor, tente novamente ou contacte-nos via WhatsApp.");
-      } else {
-        console.error("[CHAT FATAL ERROR]", err);
-        updateAssistant(() => "O concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?");
-      }
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      console.error("[CHAT FATAL ERROR]", err);
+      
+      // LOG VISÍVEL NO CHAT PARA PWA
+      updateAssistant((prev) => 
+        prev + `\n\n[ERRO DIAGNÓSTICO]: ${errorMessage}\nO concierge está ocupado agora. Gostaria de falar diretamente com a nossa equipa via WhatsApp?`
+      );
     } finally {
       clearTimeout(connectionTimeout);
       if (streamTimeout) clearTimeout(streamTimeout);
-      setChatLoading(false);
-      console.log("[DEBUG] ChatLoading desligado.");
+      
+      // Pequeno delay para garantir que o React processou a última renderização da stream
+      setTimeout(() => {
+        setChatLoading(false);
+        console.log("[DEBUG] ChatLoading resetado via Timeout.");
+      }, 100);
     }
   }
 
