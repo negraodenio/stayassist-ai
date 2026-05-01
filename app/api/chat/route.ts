@@ -6,15 +6,44 @@ import { generateQueryEmbedding } from "@/lib/embeddings";
 import { getKnowledge } from "@/lib/rag";
 import { rerankChunks } from "@/lib/rerank";
 import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
+// Configuração do Rate Limit (10 pedidos por minuto por IP)
+const ratelimit = process.env.UPSTASH_REDIS_REST_URL 
+  ? new Ratelimit({
+      redis: Redis.fromEnv(),
+      limiter: Ratelimit.slidingWindow(10, "60 s"),
+      analytics: true,
+      prefix: "@upstash/ratelimit",
+    })
+  : null;
+
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
   try {
+    // 1. Verificar Rate Limit se as chaves existirem
+    if (ratelimit) {
+      const ip = req.headers.get("x-forwarded-for") || "127.0.0.1";
+      const { success, limit, reset, remaining } = await ratelimit.limit(ip);
+      
+      if (!success) {
+        return new Response("Muitos pedidos. Tente novamente mais tarde.", {
+          status: 429,
+          headers: {
+            "X-RateLimit-Limit": limit.toString(),
+            "X-RateLimit-Remaining": remaining.toString(),
+            "X-RateLimit-Reset": reset.toString(),
+          },
+        });
+      }
+    }
+
     const body = await req.json();
     const { messages: rawMessages, propertyId, propertyName, unitName, sessionId, isGuest } = body;
 
