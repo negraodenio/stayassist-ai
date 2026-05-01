@@ -22,8 +22,8 @@ export async function parseAIStream(
   let accumulatedContent = "";
   let hasDataStreamLines = false;
 
-  function processLine(line: string) {
-    if (!line) return;
+    const technicalPrefixes = ["1:", "2:", "3:", "4:", "5:", "6:", "7:", "8:", "9:", "a:", "b:", "c:", "d:", "e:", "f:"];
+    const isTechnical = technicalPrefixes.some(p => line.startsWith(p));
 
     if (line.startsWith("0:")) {
       hasDataStreamLines = true;
@@ -33,17 +33,14 @@ export async function parseAIStream(
       } catch (e) {
         // Ignore malformed JSON tokens
       }
-    } else if (line.startsWith("d:") || line.startsWith("2:") || line.startsWith("e:")) {
+    } else if (isTechnical) {
       hasDataStreamLines = true;
-      // metadata markers — no text to extract
-    } else {
-      // Robust Fallback: if it's not a data line, or if we haven't seen them yet,
-      // treat as raw text.
-      accumulatedContent += line + (hasDataStreamLines ? "" : "\n");
+      // Skip metadata/tool markers — no text to extract for the user
+    } else if (!hasDataStreamLines) {
+      // Robust Fallback: only treat as raw text if we haven't detected a DataStream protocol yet
+      accumulatedContent += line + "\n";
       onContent(accumulatedContent);
     }
-
-  }
 
   let done = false;
   while (!done) {

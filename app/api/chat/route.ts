@@ -7,6 +7,9 @@ import { generateQueryEmbedding } from "@/lib/embeddings";
 import { getKnowledge } from "@/lib/rag";
 import { getMemory, saveMemory } from "@/lib/memory";
 import { rerankChunks } from "@/lib/rerank";
+import { searchNearbyPlaces } from "@/lib/places";
+import { tool } from "ai";
+import { z } from "zod";
 
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
@@ -103,8 +106,8 @@ Your goal is to provide accurate information based ONLY on the provided context 
 
 CORE DIRECTIVES:
 1. PROPERTY INFO: Use the CONTEXT below for rules, Wi-Fi, schedules, and specific hotel amenities.
-2. HONESTY: If the CONTEXT does not contain a specific hotel-related answer (like a specific room's safe code not listed), say exactly: "O concierge está ocupado no momento. Por favor, tente novamente em instantes." This will allow our human staff to assist you.
-3. LOCAL ADVICE: For general questions about the city (weather, general tourism, history), you may use your general knowledge, but always prioritize hotel-specific info if available.
+2. LOCAL RECOMMENDATIONS: If a guest asks for restaurants, cafes, or attractions, use the 'searchNearby' tool to get real-time data from Google Places.
+3. HONESTY: If the CONTEXT does not contain a specific hotel-related answer and it's not something you can search on Google Places, say exactly: "O concierge está ocupado no momento. Por favor, tente novamente em instantes."
 4. TONE: Professional, welcoming, and concise.
 
 CONTEXT:
@@ -116,13 +119,43 @@ ${knowledgeContext || "No specific property context provided."}
     };
 
 
-    // 5. LLM Streaming com Gemini 2.0 Flash (Restaurado)
-    console.log(`[RAG DEBUG] Starting stream with stable model: google/gemini-2.0-flash-001`);
+    // 5. LLM Streaming with Tools
+    console.log(`[RAG DEBUG] Starting stream with stable model and tools: google/gemini-2.0-flash-001`);
     const result = await streamText({
       model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
+      tools: {
+        searchNearby: tool({
+          description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
+          parameters: z.object({
+            type: z.string().describe("The type of place (e.g., restaurant, cafe, park, pharmacy)"),
+            radius: z.number().optional().default(1500).describe("Search radius in meters"),
+          }),
+          execute: async ({ type, radius }) => {
+            console.log(`[TOOL] Searching for ${type} within ${radius}m`);
+            // Geocoding Fallback: Usaremos as coordenadas de Lisboa como padrão até termos o campo de morada no BD
+            // TODO: Buscar coordenadas reais da 'propertyId' no BD
+            const lat = -23.5505; // Exemplo: São Paulo (ajustaremos para ser dinâmico)
+            const lng = -46.6333;
+            
+            const places = await searchNearbyPlaces(lat, lng, type, radius);
+            return {
+              location: "Nearby " + (propertyName || "the hotel"),
+              results: places.map(p => ({
+                name: p.displayName.text,
+                address: p.formattedAddress,
+                rating: p.rating,
+                type: p.primaryTypeDisplayName?.text,
+                link: p.googleMapsUri
+              }))
+            };
+          }
+        })
+      },
+      maxSteps: 5,
       onFinish: ({ text }) => {
+
         // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
           sendRequestWhatsAppAlert({
