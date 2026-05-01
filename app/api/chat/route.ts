@@ -162,15 +162,13 @@ ${knowledgeContext || "No specific property context provided."}
       }
     };
 
-    // 6. LLM Streaming with Tools (Rock-stable version)
+    // 6. LLM Streaming (Diagnostic mode: No tools)
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
       system: systemPrompt,
       messages,
-      tools: {
-        searchNearby: searchNearbyTool
-      },
-      maxSteps: 5,
+      // tools: { searchNearby: searchNearbyTool },
+      // maxSteps: 5,
       onFinish: ({ text }: any) => {
         // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
@@ -197,18 +195,16 @@ ${knowledgeContext || "No specific property context provided."}
       }
     } as any);
 
-    // 6. Return standard DataStream with cache-busting
+    // 6. Return standard DataStream
     const res = result as any;
-    const responseHeaders = { 
-      ...customHeaders,
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-      "Pragma": "no-cache"
-    };
-
     if (typeof res.toDataStreamResponse === 'function') {
-      return res.toDataStreamResponse({ headers: responseHeaders });
+      return res.toDataStreamResponse({ 
+        headers: { "Cache-Control": "no-store" } 
+      });
     }
-    return res.toTextStreamResponse({ headers: responseHeaders });
+    return res.toTextStreamResponse({ 
+      headers: { "Cache-Control": "no-store" } 
+    });
 
 
   } catch (error: any) {
