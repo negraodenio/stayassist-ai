@@ -39,13 +39,15 @@ export async function POST(req: Request) {
       return new Response("Missing propertyId", { status: 400 });
     }
 
-    // 1. Limpeza e Validação de Histórico (Crucial para evitar erro 500 de roles seguidos)
-    const messages = rawMessages
-      .filter((m: any) => (m.role === "user" || m.role === "assistant"))
+    // 1. Limpeza e Validação de Histórico (Foco em Turnos Múltiplos)
+    const messages = (rawMessages || [])
+      .filter((m: any) => m && (m.role === "user" || m.role === "assistant"))
       .map((m: any) => ({
         role: m.role as "user" | "assistant",
-        content: (typeof m.content === "string" ? m.content : String(m.content || "")).trim() || " " 
+        content: String(m.content || " ").trim() || " " 
       }));
+
+    console.log(`[CHAT TURN] Session: ${activeSession} | Messages: ${messages.length}`);
 
     if (messages.length === 0) {
       return new Response("No messages provided", { status: 400 });

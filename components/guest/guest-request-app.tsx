@@ -155,15 +155,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     let streamTimeout: NodeJS.Timeout | null = null;
 
     try {
-      console.log("%c[CHAT FETCH] Iniciando requisição...", "color: blue; font-weight: bold;");
-      const response = await fetch("/api/chat", {
+      console.log(`%c[CHAT FETCH] Turno: ${historySnapshot.length / 2 + 1}`, "color: blue; font-weight: bold;");
+      const response = await fetch(`/api/chat?t=${Date.now()}`, {
         method: "POST",
         signal: controller.signal,
-        keepalive: true, // SENIOR: Garante que o request termine mesmo se a aba fechar (PWA)
-        credentials: "omit",
+        keepalive: true,
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
         },
         body: JSON.stringify({
           messages: [...historySnapshot, userMessage].map(({ role, content }) => ({
