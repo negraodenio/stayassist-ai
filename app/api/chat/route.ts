@@ -53,6 +53,18 @@ export async function POST(req: Request) {
     const activeSession = sessionId || "admin-test-session";
     const userType = isGuest ? "guest" : "admin";
 
+    // 2. Fetch Property Metadata (Geolocation & Address)
+    const supabase = await createClient();
+    const { data: propertyData } = await supabase
+      .from("properties")
+      .select("id, name, address, latitude, longitude")
+      .eq("id", propertyId)
+      .single();
+
+    const propLat = propertyData?.latitude;
+    const propLng = propertyData?.longitude;
+    const propAddress = propertyData?.address;
+
     let knowledgeContext = "Nenhuma informação específica encontrada.";
     let debugInfo = null;
     let sourcesUsed: string[] = [];
@@ -106,9 +118,10 @@ Your goal is to provide accurate information based ONLY on the provided context 
 
 CORE DIRECTIVES:
 1. PROPERTY INFO: Use the CONTEXT below for rules, Wi-Fi, schedules, and specific hotel amenities.
-2. LOCAL RECOMMENDATIONS: If a guest asks for restaurants, cafes, or attractions, use the 'searchNearby' tool to get real-time data from Google Places.
-3. HONESTY: If the CONTEXT does not contain a specific hotel-related answer and it's not something you can search on Google Places, say exactly: "O concierge está ocupado no momento. Por favor, tente novamente em instantes."
-4. TONE: Professional, welcoming, and concise.
+2. HOTEL LOCATION: The hotel is located at: ${propAddress || "Address not set in dashboard"}.
+3. LOCAL RECOMMENDATIONS: If a guest asks for restaurants, cafes, or attractions, use the 'searchNearby' tool to get real-time data from Google Places.
+4. HONESTY: If the CONTEXT does not contain a specific hotel-related answer and it's not something you can search on Google Places, say exactly: "O concierge está ocupado no momento. Por favor, tente novamente em instantes."
+5. TONE: Professional, welcoming, and concise.
 
 CONTEXT:
 ${knowledgeContext || "No specific property context provided."}
@@ -134,10 +147,10 @@ ${knowledgeContext || "No specific property context provided."}
           }),
           execute: async ({ type, radius }) => {
             console.log(`[TOOL] Searching for ${type} within ${radius}m`);
-            // Geocoding Fallback: Usaremos as coordenadas de Lisboa como padrão até termos o campo de morada no BD
-            // TODO: Buscar coordenadas reais da 'propertyId' no BD
-            const lat = -23.5505; // Exemplo: São Paulo (ajustaremos para ser dinâmico)
-            const lng = -46.6333;
+            
+            // Use property coordinates or fallback to a default (Lisbon) if not set
+            const lat = propLat || 38.7167; 
+            const lng = propLng || -9.1333;
             
             const places = await searchNearbyPlaces(lat, lng, type, radius);
             return {
@@ -151,6 +164,7 @@ ${knowledgeContext || "No specific property context provided."}
               }))
             };
           }
+
         })
       },
       maxSteps: 5,

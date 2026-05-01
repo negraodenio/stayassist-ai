@@ -273,4 +273,38 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
   }
 }
 
+export async function updatePropertyLocation(prevState: unknown, formData: FormData) {
+  const propertyId = formData.get("propertyId") as string;
+  const address = formData.get("address") as string;
+  const latitude = parseFloat(formData.get("latitude") as string);
+  const longitude = parseFloat(formData.get("longitude") as string);
+
+  if (!propertyId) return { error: "Property ID missing." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  try {
+    const { error } = await supabase
+      .from("properties")
+      .update({
+        address,
+        latitude: isNaN(latitude) ? null : latitude,
+        longitude: isNaN(longitude) ? null : longitude,
+      })
+      .eq("id", propertyId)
+      .eq("user_id", user.id);
+
+    if (error) throw error;
+
+    revalidatePath("/dashboard", "layout");
+    return { success: true };
+  } catch (err) {
+    console.error("Location update error:", err);
+    return { error: "Failed to update location." };
+  }
+}
+
+
 

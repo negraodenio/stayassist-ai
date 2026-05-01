@@ -38,7 +38,11 @@ interface DashboardProperty {
   id: string;
   name: string;
   organization_id: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
 }
+
 
 interface DashboardRequest {
   id: string;
@@ -315,22 +319,96 @@ export function DashboardShell({
                 <SectionHeading
                   eyebrow="Properties"
                   title="Portfolio visibility"
-                  description="Active properties currently managed by StayAssist."
+                  description="Active properties currently managed by StayAssist. Configure location for Google Places search."
                 />
-                <div className="section-grid mt-6 grid gap-4">
-                  {properties.map((property) => (
-                    <article
-                      key={property.id}
-                      className="rounded-[24px] border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(244,238,229,0.9))] p-5"
-                    >
-                      <h3 className="font-display text-2xl text-navy">{property.name}</h3>
-                      <div className="mt-5 flex items-center justify-between text-sm text-muted">
-                        <span>Managed via StayAssist AI</span>
+                
+                <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_400px]">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    {properties.map((property) => (
+                      <article
+                        key={property.id}
+                        className={`rounded-[24px] border p-6 transition cursor-pointer ${
+                          selectedPropertyId === property.id 
+                            ? "border-accent bg-white shadow-md luxury-ring" 
+                            : "border-border bg-white/60 hover:bg-white"
+                        }`}
+                        onClick={() => setSelectedPropertyId(property.id)}
+                      >
+                        <h3 className="font-display text-2xl text-navy">{property.name}</h3>
+                        <p className="mt-2 text-xs text-muted">ID: {property.id}</p>
+                        <div className="mt-6 flex items-center justify-between text-sm text-muted">
+                          <span className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full ${property.latitude ? "bg-success" : "bg-stone-300"}`}></span>
+                            {property.latitude ? "Location Set" : "Location Pending"}
+                          </span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="rounded-[28px] border border-border bg-white p-8 shadow-sm">
+                    <h3 className="text-xl font-display text-navy mb-6">Location Settings</h3>
+                    <p className="text-sm text-muted mb-6">Set the physical location for <strong>{selectedProperty?.name}</strong> to enable Google Places searching.</p>
+                    
+                    <form action={async (fd) => {
+                      const m = await import("@/app/dashboard/actions");
+                      const res = await m.updatePropertyLocation(null, fd);
+                      if (res?.success) alert("Location updated successfully!");
+                      else if (res?.error) alert(res.error);
+                    }} className="flex flex-col gap-5">
+                      <input type="hidden" name="propertyId" value={selectedPropertyId} />
+                      
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-navy">Full Address</label>
+                        <input
+                          name="address"
+                          type="text"
+                          defaultValue={selectedProperty?.address || ""}
+                          placeholder="e.g. Rua Augusta, 100, Lisboa"
+                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                        />
                       </div>
-                    </article>
-                  ))}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">Latitude</label>
+                          <input
+                            name="latitude"
+                            type="number"
+                            step="any"
+                            defaultValue={selectedProperty?.latitude || ""}
+                            placeholder="e.g. 38.710"
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-semibold text-navy">Longitude</label>
+                          <input
+                            name="longitude"
+                            type="number"
+                            step="any"
+                            defaultValue={selectedProperty?.longitude || ""}
+                            placeholder="e.g. -9.139"
+                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="mt-4 rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+                      >
+                        Save Property Location
+                      </button>
+                    </form>
+                    
+                    <p className="mt-6 text-[10px] text-muted leading-relaxed italic">
+                      * Coordenadas são necessárias para buscas precisas. Podes encontrá-las clicando com o botão direito no local no Google Maps.
+                    </p>
+                  </div>
                 </div>
               </section>
+
 
               <section id="knowledge" className="pt-10">
                 <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
