@@ -171,7 +171,6 @@ ${knowledgeContext || "No specific property context provided."}
       tools: {
         searchNearby: searchNearbyTool
       },
-      maxSteps: 5,
       onFinish: ({ text }) => {
 
         // WhatsApp Alert (Async)
