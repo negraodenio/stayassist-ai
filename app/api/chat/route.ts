@@ -197,7 +197,7 @@ ${knowledgeContext || "No specific property context provided."}
         saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
           .catch(e => console.error("Memory save error (assistant):", e));
       }
-    });
+    } as any);
 
 
 
