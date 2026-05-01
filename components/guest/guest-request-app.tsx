@@ -205,7 +205,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       setChatLoading(false);
     }
   }
- }
 
   async function refreshRequests() {
     if (!unit) return;
