@@ -129,6 +129,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     ]);
     setChatInput("");
     setChatLoading(true);
+    // @ts-ignore
+    window.__CHAT_LOADING__ = true;
 
     const updateAssistant = (updater: (prev: string) => string) => {
       setChatMessages((prev) =>
@@ -201,9 +203,22 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
       );
     } finally {
       clearTimeout(connectionTimeout);
-      // CORRECÇÃO: sem setTimeout artificial
       setChatLoading(false);
+      // @ts-ignore - Para diagnóstico via consola
+      window.__CHAT_LOADING__ = false;
     }
+  }
+
+  if (!unit) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-stone-50 p-6 text-center">
+        <div className="max-w-xs">
+          <div className="mb-4 h-8 w-8 animate-spin rounded-full border-4 border-navy border-t-transparent mx-auto"></div>
+          <p className="text-navy font-medium">Carregando informações da unidade...</p>
+          <p className="mt-2 text-xs text-muted">Se isto demorar muito, verifique a sua ligação à internet ou o QR Code.</p>
+        </div>
+      </div>
+    );
   }
 
   async function refreshRequests() {
