@@ -143,26 +143,26 @@ ${knowledgeContext || "No specific property context provided."}
         searchNearby: tool({
           description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
           parameters: z.object({
-            type: z.string().describe("The type of place (e.g., restaurant, cafe, park, pharmacy)"),
-            radius: z.number().optional().describe("Search radius in meters"),
+            type: z.string(),
+            radius: z.number().optional(),
           }),
           execute: async ({ type, radius }: { type: string; radius?: number }) => {
-            const searchRadius = radius || 1500;
+            const searchRadius = radius ?? 1500;
             console.log(`[TOOL] Searching for ${type} within ${searchRadius}m`);
             
-            // Use property coordinates or fallback to a default (Lisbon) if not set
-            const lat = propLat || 38.7167; 
-            const lng = propLng || -9.1333;
+            const lat = propLat ?? 38.7167; 
+            const lng = propLng ?? -9.1333;
             
             const places = await searchNearbyPlaces(lat, lng, type, searchRadius);
+            
             return {
-              location: "Nearby " + (propertyName || "the hotel"),
+              location: propertyName || "the hotel",
               results: places.map(p => ({
-                name: p.displayName.text,
-                address: p.formattedAddress,
-                rating: p.rating,
-                type: p.primaryTypeDisplayName?.text,
-                link: p.googleMapsUri
+                name: p.displayName?.text || "Unknown",
+                address: p.formattedAddress || "No address",
+                rating: p.rating ?? 0,
+                category: p.primaryTypeDisplayName?.text || "Place",
+                mapsLink: p.googleMapsUri
               }))
             };
           }
