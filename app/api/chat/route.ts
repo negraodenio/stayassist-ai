@@ -144,16 +144,17 @@ ${knowledgeContext || "No specific property context provided."}
           description: "Search for nearby places like restaurants, pharmacies, or attractions using Google Places.",
           parameters: z.object({
             type: z.string().describe("The type of place (e.g., restaurant, cafe, park, pharmacy)"),
-            radius: z.number().optional().default(1500).describe("Search radius in meters"),
+            radius: z.number().optional().describe("Search radius in meters"),
           }),
-          execute: async ({ type, radius }) => {
-            console.log(`[TOOL] Searching for ${type} within ${radius}m`);
+          execute: async ({ type, radius }: { type: string; radius?: number }) => {
+            const searchRadius = radius || 1500;
+            console.log(`[TOOL] Searching for ${type} within ${searchRadius}m`);
             
             // Use property coordinates or fallback to a default (Lisbon) if not set
             const lat = propLat || 38.7167; 
             const lng = propLng || -9.1333;
             
-            const places = await searchNearbyPlaces(lat, lng, type, radius);
+            const places = await searchNearbyPlaces(lat, lng, type, searchRadius);
             return {
               location: "Nearby " + (propertyName || "the hotel"),
               results: places.map(p => ({
