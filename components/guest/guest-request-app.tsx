@@ -439,8 +439,16 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                                 <Smartphone size={14} /> WhatsApp Support
                               </a>
                             </div>
-                          ) : (
+                          ) : m.content ? (
                             m.content
+                          ) : chatLoading ? (
+                            <div className="flex items-center gap-1.5 py-1">
+                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20 [animation-delay:-0.3s]"></div>
+                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20 [animation-delay:-0.15s]"></div>
+                              <div className="h-1.5 w-1.5 animate-bounce rounded-full bg-navy/20"></div>
+                            </div>
+                          ) : (
+                            "..."
                           )}
                         </div>
                         {/* Trust Badge para RAG */}

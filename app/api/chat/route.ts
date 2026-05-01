@@ -162,17 +162,18 @@ ${knowledgeContext || "No specific property context provided."}
       }
     };
 
-    // 6. LLM Streaming with Tools
+    // 6. LLM Streaming with Tools (Blindado para Multi-step)
     console.log(`[RAG DEBUG] Starting stream with stable model and tools: google/gemini-2.0-flash-001`);
-    const result = await streamText({
+    
+    const streamConfig: any = {
       model: openrouter("google/gemini-2.0-flash-001"),
       system: systemPrompt,
       messages,
       tools: {
         searchNearby: searchNearbyTool
       },
+      maxSteps: 5,
       onFinish: ({ text }: any) => {
-
         // WhatsApp Alert (Async)
         if (isGuest && userMessageContent) {
           sendRequestWhatsAppAlert({
@@ -196,7 +197,9 @@ ${knowledgeContext || "No specific property context provided."}
         saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text })
           .catch(e => console.error("Memory save error (assistant):", e));
       }
-    } as any);
+    };
+
+    const result = await streamText(streamConfig);
 
 
 
