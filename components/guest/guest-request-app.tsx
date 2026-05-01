@@ -431,7 +431,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                                 className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs font-bold text-white transition hover:scale-[1.02] active:scale-95 shadow-sm"
                                 onClick={(e) => {
                                   // No PWA, às vezes o target _blank falha, vamos reforçar
-                                  if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
+                                  if ((window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches) {
                                     window.open(e.currentTarget.href, '_blank');
                                   }
                                 }}
