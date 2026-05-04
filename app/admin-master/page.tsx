@@ -70,7 +70,7 @@ export default async function AdminMasterPage() {
               </h2>
             </div>
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              {organizations.map((org) => (
+              {organizations.map((org: any) => (
                 <div key={org.id} className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group">
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-white text-lg">{org.name}</span>
