@@ -137,7 +137,7 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
       },
     });
 
-    return result.toDataStreamResponse({
+    return result.toTextStreamResponse({
       headers: {
         "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
       },
