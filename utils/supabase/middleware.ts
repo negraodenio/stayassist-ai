@@ -31,16 +31,8 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Get user profile for RBAC
-  let userRole: string | null = null;
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-    userRole = profile?.role || "staff";
-  }
+  // Get user profile for RBAC from metadata to avoid RLS recursion
+  const userRole = user?.user_metadata?.role || "staff";
 
   // Protect /admin-master: Only superadmins allowed
   if (request.nextUrl.pathname.startsWith("/admin-master")) {
