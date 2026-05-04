@@ -23,33 +23,52 @@ async function ensureAdmin() {
 
 export async function getOrganizationsAction() {
   await ensureAdmin();
-  return await listAllOrganizations();
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("organizations").select("*").order("name", { ascending: true });
+  if (error) throw error;
+  return data;
 }
 
 export async function createOrganizationAction(name: string) {
   await ensureAdmin();
-  const result = await dbCreateOrganization(name);
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("organizations").insert({ name }).select().single();
+  if (error) throw error;
   revalidatePath("/admin-master");
-  return result;
+  return data;
 }
 
 export async function getPropertiesAction(organizationId?: string) {
   await ensureAdmin();
-  return await listAllProperties(organizationId);
+  const admin = createAdminClient();
+  let query = admin.from("properties").select("*, organizations(name)");
+  if (organizationId) query = query.eq("organization_id", organizationId);
+  const { data, error } = await query.order("name", { ascending: true });
+  if (error) throw error;
+  return data;
 }
 
 export async function createPropertyAction(name: string, organizationId: string) {
   await ensureAdmin();
-  const result = await dbCreateProperty(name, organizationId);
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("properties").insert({ name, organization_id: organizationId }).select().single();
+  if (error) throw error;
   revalidatePath("/admin-master");
-  return result;
+  return data;
 }
 
 export async function createUnitAction(name: string, propertyId: string) {
   await ensureAdmin();
-  const result = await dbCreateUnit(name, propertyId);
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("units").insert({ 
+    name, 
+    property_id: propertyId,
+    qr_token: Math.random().toString(36).substring(2, 15),
+    qr_created_at: new Date().toISOString()
+  }).select().single();
+  if (error) throw error;
   revalidatePath("/admin-master");
-  return result;
+  return data;
 }
 
 export async function createUserAction(email: string, role: string, organizationId: string) {
@@ -82,7 +101,6 @@ export async function createUserAction(email: string, role: string, organization
 
   if (profileError) {
     console.error("Profile creation error:", profileError);
-    // Cleanup auth user if profile creation fails to maintain consistency
     await adminClient.auth.admin.deleteUser(authUser.user.id);
     throw new Error(profileError.message);
   }
