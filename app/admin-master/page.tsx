@@ -14,26 +14,46 @@ export default async function AdminMasterPage() {
     redirect("/dashboard");
   }
 
-  const admin = createAdminClient();
-  const [orgsRes, propsRes, profilesRes] = await Promise.all([
-    admin.from("organizations").select("*").order("name", { ascending: true }),
-    admin.from("properties").select("*, organizations(name)").order("name", { ascending: true }),
-    admin.from("profiles").select("*, organizations(name)").order("email", { ascending: true })
-  ]);
+  let organizations: any[] = [];
+  let properties: any[] = [];
+  let profiles: any[] = [];
+  let fetchError: string | null = null;
 
-  const organizations = orgsRes.data || [];
-  const properties = (propsRes.data || []).map((p: any) => ({
-    ...p,
-    organizationName: p.organizations?.name
-  }));
-  const profiles = (profilesRes.data || []).map((p: any) => ({
-    ...p,
-    organizationName: p.organizations?.name || "No Organization"
-  }));
+  try {
+    const admin = createAdminClient();
+    const [orgsRes, propsRes, profilesRes] = await Promise.all([
+      admin.from("organizations").select("*").order("name", { ascending: true }),
+      admin.from("properties").select("*, organizations(name)").order("name", { ascending: true }),
+      admin.from("profiles").select("*, organizations(name)").order("email", { ascending: true })
+    ]);
+
+    if (orgsRes.error) throw new Error("Orgs fetch: " + orgsRes.error.message);
+    if (propsRes.error) throw new Error("Props fetch: " + propsRes.error.message);
+    if (profilesRes.error) throw new Error("Profiles fetch: " + profilesRes.error.message);
+
+    organizations = orgsRes.data || [];
+    properties = (propsRes.data || []).map((p: any) => ({
+      ...p,
+      organizationName: p.organizations?.name
+    }));
+    profiles = (profilesRes.data || []).map((p: any) => ({
+      ...p,
+      organizationName: p.organizations?.name || "No Organization"
+    }));
+  } catch (err: any) {
+    console.error("Master Admin Fetch Error:", err);
+    fetchError = err.message;
+  }
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200">
       <div className="max-w-7xl mx-auto px-6 py-12">
+        {fetchError && (
+          <div className="mb-8 p-6 bg-red-500/20 border border-red-500/30 text-red-200 rounded-2xl">
+            <h2 className="text-xl font-bold mb-2">Server Error</h2>
+            <p>{fetchError}</p>
+          </div>
+        )}
         <header className="mb-16 flex justify-between items-start">
           <div>
             <div className="flex items-center gap-4 mb-4">
