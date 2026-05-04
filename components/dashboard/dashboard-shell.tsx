@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { setupHotelAndUnits, addKnowledgeSnippet, uploadKnowledgeFile } from "@/app/dashboard/actions";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
@@ -161,7 +162,7 @@ export function DashboardShell({
               );
             })}
             {userEmail === "negraodenio@gmail.com" && (
-              <a
+              <Link
                 href="/admin-master"
                 className="flex items-center gap-4 rounded-2xl px-4 py-3 bg-amber-500/10 text-amber-600 transition hover:bg-amber-500/20 luxury-ring"
               >
@@ -172,7 +173,7 @@ export function DashboardShell({
                   <p className="font-semibold italic">Master Admin</p>
                   <p className="text-xs uppercase tracking-[0.24em] opacity-70 italic">Control Panel</p>
                 </div>
-              </a>
+              </Link>
             )}
           </nav>
 
