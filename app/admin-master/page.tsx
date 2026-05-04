@@ -1,6 +1,6 @@
-import { createClient } from "@/utils/supabase/server";
+
+import { createClient, createAdminClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { listAllOrganizations, listAllProperties, listAllProfiles } from "@/lib/supabase-rest";
 import { AdminForms } from "@/components/admin/admin-forms";
 import Link from "next/link";
 
@@ -14,11 +14,22 @@ export default async function AdminMasterPage() {
     redirect("/dashboard");
   }
 
-  const [organizations, properties, profiles] = await Promise.all([
-    listAllOrganizations(),
-    listAllProperties(),
-    listAllProfiles()
+  const admin = createAdminClient();
+  const [orgsRes, propsRes, profilesRes] = await Promise.all([
+    admin.from("organizations").select("*").order("name", { ascending: true }),
+    admin.from("properties").select("*, organizations(name)").order("name", { ascending: true }),
+    admin.from("profiles").select("*, organizations(name)").order("email", { ascending: true })
   ]);
+
+  const organizations = orgsRes.data || [];
+  const properties = (propsRes.data || []).map((p: any) => ({
+    ...p,
+    organizationName: p.organizations?.name
+  }));
+  const profiles = (profilesRes.data || []).map((p: any) => ({
+    ...p,
+    organizationName: p.organizations?.name || "No Organization"
+  }));
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200">
