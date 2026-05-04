@@ -117,7 +117,7 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
       onFinish: async ({ text }) => {
         try {
           if (isGuest && userMessageContent) {
-            sendRequestWhatsAppAlert({
+            await sendRequestWhatsAppAlert({
               id: "chat-escalation",
               propertyId,
               property: finalPropertyName,
@@ -137,28 +137,9 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
       },
     });
 
-    // CORRECÇÃO PRINCIPAL: ReadableStream manual garante controller.close() explícito
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of result.textStream) {
-            controller.enqueue(encoder.encode(chunk));
-          }
-        } catch (e) {
-          console.error("[Stream Error]", e);
-          controller.error(e);
-        } finally {
-          controller.close();
-        }
-      },
-    });
-
-    return new Response(readable, {
+    return result.toDataStreamResponse({
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
         "X-Is-Rag": sourcesUsed.length > 0 ? "true" : "false",
-        "Cache-Control": "no-cache, no-store, must-revalidate",
       },
     });
 

@@ -14,7 +14,7 @@ export function LoginForm() {
     <div className="glass-panel luxury-ring w-full max-w-md rounded-[32px] p-6 sm:p-8">
       <div className="mb-8">
         <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-          StayAssist AI
+          Malia Concierge
         </p>
         <h1 className="mt-3 font-display text-4xl tracking-tight text-navy">
           Welcome back
@@ -34,7 +34,7 @@ export function LoginForm() {
             name="email"
             type="email"
             required
-            placeholder="you@stayassist.ai"
+            placeholder="you@maliaconcierge.com"
             className="w-full rounded-2xl border border-border bg-white/90 px-4 py-3 text-navy outline-none transition placeholder:text-muted/70 focus:border-accent"
           />
         </div>

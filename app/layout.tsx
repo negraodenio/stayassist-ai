@@ -13,8 +13,11 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "StayAssist AI",
-  description: "AI-powered hospitality operations dashboard",
+  title: "Malia Concierge",
+  description: "Premium hospitality and concierge services",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

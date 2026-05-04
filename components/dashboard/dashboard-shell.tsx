@@ -69,11 +69,13 @@ export function DashboardShell({
   unitsCount,
   recentRequests,
   knowledge,
+  userEmail,
 }: {
   properties: DashboardProperty[];
   unitsCount: number;
   recentRequests: DashboardRequest[];
   knowledge: DashboardKnowledge[];
+  userEmail?: string;
 }) {
   const [selectedPropertyId, setSelectedPropertyId] = (typeof window !== 'undefined') 
     ? require('react').useState(properties[0]?.id || "")
@@ -127,12 +129,12 @@ export function DashboardShell({
           <div className="mb-8 flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-                StayAssist AI
+                Malia Concierge
               </p>
               <h1 className="mt-2 font-display text-3xl text-navy">Operations</h1>
             </div>
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-navy text-sm font-semibold text-white">
-              SA
+              MC
             </div>
           </div>
 
@@ -158,6 +160,20 @@ export function DashboardShell({
                 </a>
               );
             })}
+            {userEmail === "negraodenio@gmail.com" && (
+              <a
+                href="/admin-master"
+                className="flex items-center gap-4 rounded-2xl px-4 py-3 bg-amber-500/10 text-amber-600 transition hover:bg-amber-500/20 luxury-ring"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-xs font-semibold tracking-[0.2em] text-white">
+                  MA
+                </span>
+                <div>
+                  <p className="font-semibold italic">Master Admin</p>
+                  <p className="text-xs uppercase tracking-[0.24em] opacity-70 italic">Control Panel</p>
+                </div>
+              </a>
+            )}
           </nav>
 
           <div className="mt-auto pt-8">
@@ -320,7 +336,7 @@ export function DashboardShell({
                 <SectionHeading
                   eyebrow="Properties"
                   title="Portfolio visibility"
-                  description="Active properties currently managed by StayAssist. Configure location for Google Places search."
+                  description="Active properties currently managed by Malia Concierge. Configure location for Google Places search."
                 />
                 
                 <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_400px]">

@@ -226,7 +226,7 @@ export async function createGuestRequest(input: {
       guest_name: "Guest",
       guest_message: requestMessageByType[input.type],
     })
-    .select("id, organization_id, property_id, unit_id, category, status, created_at, properties(id, name), units(id, name)")
+    .select("id, organization_id, property_id, unit_id, category, status, guest_message, created_at, properties(id, name), units(id, name)")
     .single();
 
   if (error) throw new Error(error.message);
@@ -273,4 +273,130 @@ export async function updateGuestRequestStatus(
     status: data.status as GuestRequestStatus,
     createdAt: data.created_at,
   };
+}
+
+export async function listAllOrganizations() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createOrganization(name: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .insert({ name })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function listAllProperties(organizationId?: string) {
+  const supabase = await createClient();
+  let query = supabase.from("properties").select("*, organizations(name)");
+  
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data, error } = await query.order("name", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data.map((prop: any) => ({
+    ...prop,
+    organizationName: prop.organizations?.name
+  }));
+}
+
+export async function createProperty(name: string, organizationId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("properties")
+    .insert({ name, organization_id: organizationId })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createUnit(name: string, propertyId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("units")
+    .insert({ 
+      name, 
+      property_id: propertyId,
+      qr_token: generateQrToken(),
+      qr_created_at: new Date().toISOString()
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function getUserProfile(userId: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("role, organization_id, email")
+    .eq("id", userId)
+    .single();
+
+  if (error) {
+    console.error("Error fetching user profile:", error.message);
+    return null;
+  }
+
+  return data;
+}
+
+export async function listAllProfiles() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*, organizations(name)")
+    .order("email", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return data.map((p: any) => ({
+    ...p,
+    organizationName: p.organizations?.name || "No Organization"
+  }));
+}
+
+export async function updateProfile(profileId: string, updates: { role?: string; organization_id?: string | null }) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .update(updates)
+    .eq("id", profileId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function createProfile(profile: { id: string; email: string; role?: string; organization_id?: string }) {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .insert(profile)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
 }

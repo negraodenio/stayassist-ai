@@ -275,7 +275,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-                  STAYASSIST GUEST
+                  MALIA CONCIERGE
                 </p>
                 <h1 className="mt-4 font-display text-5xl tracking-tight text-navy sm:text-6xl">
                   {t.welcome}
@@ -415,7 +415,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
               {t.chatTitle}
             </p>
             <h2 className="mt-3 font-display text-3xl text-navy">
-              StayAssist AI
+              Malia Concierge
             </h2>
             <p className="mt-2 text-sm leading-6 text-muted">
               {t.chatSubtitle}
@@ -546,7 +546,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                 </button>
               </div>
               <p className="mt-3 text-center text-[10px] text-muted/60 flex items-center justify-center gap-1">
-                <Smartphone size={10} /> StayAssist AI Concierge • Multilingual 5-Star Support
+                <Smartphone size={10} /> Malia Concierge • Multilingual 5-Star Support
               </p>
             </form>
           </div>

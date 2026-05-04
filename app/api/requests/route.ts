@@ -50,13 +50,17 @@ export async function POST(request: Request) {
       unitId: body.unitId,
       type: body.type,
     });
-    const alert = await sendRequestWhatsAppAlert(guestRequest);
 
-    if (alert.enabled && !alert.sent) {
-      console.warn(`WhatsApp alert failed for request ${guestRequest.id}: ${alert.error}`);
+    try {
+      const alert = await sendRequestWhatsAppAlert(guestRequest);
+      if (alert.enabled && !alert.sent) {
+        console.error(`[WA ALERT FAIL] ${alert.error}`);
+      }
+    } catch (err) {
+      console.error(`[WA ALERT CRASH]`, err);
     }
 
-    return NextResponse.json({ alert, request: guestRequest }, { status: 201 });
+    return NextResponse.json({ request: guestRequest }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       {
