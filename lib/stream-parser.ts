@@ -17,7 +17,7 @@ export async function parseAIStream(
           accumulatedContent += textToken;
           onContent(accumulatedContent);
         }
-      } catch (e) { /* skip */ }
+      } catch { /* skip */ }
     } else if (line.match(/^[0-9a-f]:/)) {
       detectedProtocol = true; // Other technical lines
     } else if (!detectedProtocol && line.trim().length > 0) {

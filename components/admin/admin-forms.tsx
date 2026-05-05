@@ -2,7 +2,29 @@
 import { useState } from "react";
 import { createOrganizationAction, createPropertyAction, createUserAction } from "@/app/admin-master/actions";
 
-export function AdminForms({ organizations, profiles = [] }: { organizations: any[], profiles?: any[] }) {
+export type AdminOrganization = {
+  id: string;
+  name: string;
+};
+
+export type AdminProfile = {
+  email: string;
+  id: string;
+  organization_id: string | null;
+  role: string;
+};
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
+}
+
+export function AdminForms({
+  organizations,
+  profiles = [],
+}: {
+  organizations: AdminOrganization[];
+  profiles?: AdminProfile[];
+}) {
   const [orgName, setOrgName] = useState("");
   const [propName, setPropName] = useState("");
   const [selectedOrgId, setSelectedOrgId] = useState("");
@@ -22,8 +44,8 @@ export function AdminForms({ organizations, profiles = [] }: { organizations: an
       await createOrganizationAction(orgName);
       setOrgName("");
       setMessage("Organization created successfully!");
-    } catch (error: any) {
-      setMessage("Error: " + error.message);
+    } catch (error) {
+      setMessage("Error: " + errorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -37,8 +59,8 @@ export function AdminForms({ organizations, profiles = [] }: { organizations: an
       await createPropertyAction(propName, selectedOrgId);
       setPropName("");
       setMessage("Property created successfully!");
-    } catch (error: any) {
-      setMessage("Error: " + error.message);
+    } catch (error) {
+      setMessage("Error: " + errorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -52,8 +74,8 @@ export function AdminForms({ organizations, profiles = [] }: { organizations: an
       const result = await createUserAction(userEmail, userRole, userOrgId);
       setUserEmail("");
       setMessage(`User created! Temp Password: ${result.tempPassword}`);
-    } catch (error: any) {
-      setMessage("Error: " + error.message);
+    } catch (error) {
+      setMessage("Error: " + errorMessage(error));
     } finally {
       setLoading(false);
     }

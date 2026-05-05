@@ -1,8 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/utils/supabase/server";
+import {
+  assertPropertyAccess,
+  getTenantContext,
+  requireTenantOrganization,
+} from "@/lib/tenant-auth";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
@@ -25,33 +28,31 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
     return { error: "Please provide a valid hotel name and a unit count between 1 and 200." };
   }
 
-  // Use the admin client to bypass RLS for this initial setup script
-  const supabase = createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-
-  // 0. Get the current user to associate with the property
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user) return { error: "User not authenticated." };
+  const context = await getTenantContext();
+  const supabase = context.admin;
 
   const slug = hotelName.toLowerCase().trim()
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
 
-  // 1. Create Organization
-  const { data: org, error: orgError } = await supabase
-    .from("organizations")
-    .insert({ 
-      name: `${hotelName} Group`,
-      slug: slug
-    })
-    .select()
-    .single();
+  let organizationId = context.organizationId;
 
-  if (orgError) {
-    return { error: `Failed to create organization: ${orgError.message}` };
+  if (context.isSuperAdmin) {
+    const { data: org, error: orgError } = await supabase
+      .from("organizations")
+      .insert({
+        name: `${hotelName} Group`,
+        slug,
+      })
+      .select("id")
+      .single();
+
+    if (orgError) {
+      return { error: `Failed to create organization: ${orgError.message}` };
+    }
+    organizationId = org.id;
+  } else {
+    organizationId = requireTenantOrganization(context);
   }
 
   // 2. Create Property
@@ -59,9 +60,9 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
     .from("properties")
     .insert({ 
       name: hotelName, 
-      slug: slug, // Added slug to properties too
-      organization_id: org.id,
-      user_id: user.id 
+      slug,
+      organization_id: organizationId,
+      user_id: context.user.id,
     })
     .select()
     .single();
@@ -149,13 +150,12 @@ export async function addKnowledgeSnippet(prevState: unknown, formData: FormData
     return { error: "Please provide topic and content." };
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const context = await getTenantContext();
+  await assertPropertyAccess(context, propertyId);
 
   try {
     const embedding = await generateEmbedding(`${topic}: ${content}`);
-    const { error } = await supabase
+    const { error } = await context.admin
       .from("property_knowledge")
       .insert({
         property_id: propertyId,
@@ -174,8 +174,19 @@ export async function addKnowledgeSnippet(prevState: unknown, formData: FormData
 }
 
 export async function deleteKnowledgeSnippet(id: string) {
-  const supabase = await createClient();
-  const { error } = await supabase
+  const context = await getTenantContext();
+  const { data: knowledge, error: lookupError } = await context.admin
+    .from("property_knowledge")
+    .select("property_id")
+    .eq("id", id)
+    .maybeSingle<{ property_id: string }>();
+
+  if (lookupError) throw new Error(lookupError.message);
+  if (!knowledge) throw new Error("Knowledge item not found.");
+
+  await assertPropertyAccess(context, knowledge.property_id);
+
+  const { error } = await context.admin
     .from("property_knowledge")
     .delete()
     .eq("id", id);
@@ -204,25 +215,14 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
     return { error: "Unsupported file extension." };
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const context = await getTenantContext();
+  await assertPropertyAccess(context, propertyId);
 
   // Rate Limit Check
   if (ratelimit) {
-    const { success } = await ratelimit.limit(user.id);
+    const { success } = await ratelimit.limit(context.user.id);
     if (!success) return { error: "Limite de uploads atingido. Tente novamente em 1 minuto." };
   }
-
-  // Verify property ownership
-  const { data: propCheck } = await supabase
-    .from("properties")
-    .select("id")
-    .eq("id", propertyId)
-    .eq("user_id", user.id)
-    .single();
-
-  if (!propCheck) return { error: "Property not found or access denied." };
 
   try {
     let text = "";
@@ -234,9 +234,12 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
       const magic = buffer.slice(0, 4).toString("ascii");
       if (!magic.startsWith("%PDF")) return { error: "Invalid PDF file." };
 
-      // @ts-ignore
-      const pdfModule = await import("pdf-parse");
-      const pdf = (pdfModule as any).default || pdfModule;
+      type PdfParser = (input: Buffer) => Promise<{ text: string }>;
+      const pdfModule = (await import("pdf-parse")) as unknown as {
+        default?: PdfParser;
+      };
+      const pdf = pdfModule.default;
+      if (!pdf) throw new Error("PDF parser unavailable.");
       const data = await pdf(buffer);
       text = data.text;
     } else {
@@ -254,7 +257,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
     const chunks = chunkText(cleanedText);
     
     // Clear old data for this file
-    await supabase
+    await context.admin
       .from("property_knowledge")
       .delete()
       .eq("property_id", propertyId)
@@ -276,7 +279,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
         };
       }));
 
-      const { error: insertError } = await supabase
+      const { error: insertError } = await context.admin
         .from("property_knowledge")
         .insert(rows);
       
@@ -322,12 +325,11 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
     }
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Unauthorized" };
+  const context = await getTenantContext();
+  await assertPropertyAccess(context, propertyId);
 
   try {
-    const { error } = await supabase
+    const { error } = await context.admin
       .from("properties")
       .update({
         address,
@@ -335,8 +337,7 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
         latitude: isNaN(latitude) ? null : latitude,
         longitude: isNaN(longitude) ? null : longitude,
       })
-      .eq("id", propertyId)
-      .eq("user_id", user.id);
+      .eq("id", propertyId);
 
     if (error) {
       console.error("Supabase Error:", error);
@@ -354,5 +355,85 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
   }
 }
 
+function normalizeE164Phone(value: string) {
+  const compact = value.replace(/[\s().-]/g, "");
+  if (!/^\+[1-9]\d{7,14}$/.test(compact)) {
+    return null;
+  }
 
+  return compact;
+}
 
+export async function updateWhatsAppAlertPhone(
+  prevState: unknown,
+  formData: FormData,
+) {
+  const rawPhone = (formData.get("whatsappAlertPhone") as string | null) || "";
+  const context = await getTenantContext();
+  const organizationId = requireTenantOrganization(context);
+
+  if (!rawPhone.trim()) {
+    const { error } = await context.admin
+      .from("organizations")
+      .update({ whatsapp_alert_phone: null })
+      .eq("id", organizationId);
+
+    if (error) return { error: error.message };
+    revalidatePath("/dashboard", "layout");
+    return { success: true, message: "WhatsApp alerts disabled for this tenant." };
+  }
+
+  const normalizedPhone = normalizeE164Phone(rawPhone);
+  if (!normalizedPhone) {
+    return {
+      error:
+        "Use international format with country code, for example +351912345678 or +556191786223.",
+    };
+  }
+
+  const { error } = await context.admin
+    .from("organizations")
+    .update({ whatsapp_alert_phone: normalizedPhone })
+    .eq("id", organizationId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard", "layout");
+  return { success: true, message: "WhatsApp alert phone saved." };
+}
+
+export async function sendTestWhatsAppAlert(
+  organizationId: string,
+  phoneNumber: string,
+) {
+  const { sendRequestWhatsAppAlert } = await import("@/lib/twilio-whatsapp");
+
+  // Mock guest request for testing
+  const mockRequest = {
+    id: "test-id",
+    propertyId: "test-property-id",
+    property: "Test Property",
+    unitId: "test-unit-id",
+    room: "Test Room 101",
+    type: "towels" as const,
+    status: "Open" as const,
+    createdAt: new Date().toISOString(),
+    guestMessage: "This is a test alert from StayAssist AI. If you received this, your configuration is working!",
+  };
+
+  try {
+    const result = await sendRequestWhatsAppAlert(mockRequest, { to: phoneNumber });
+
+    if (result.enabled && result.sent) {
+      return { success: true, message: "Test alert sent! Check your WhatsApp." };
+    } else {
+      return {
+        error: result.enabled
+          ? `Fail: ${result.error}${result.errorCode ? ` (Code: ${result.errorCode})` : ""}`
+          : result.reason,
+      };
+    }
+  } catch (err) {
+    return { error: `Crash: ${err instanceof Error ? err.message : "Unknown error"}` };
+  }
+}

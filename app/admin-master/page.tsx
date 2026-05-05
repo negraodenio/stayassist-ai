@@ -1,10 +1,35 @@
 
 import { createClient, createAdminClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { AdminForms } from "@/components/admin/admin-forms";
+import {
+  AdminForms,
+  type AdminOrganization,
+  type AdminProfile,
+} from "@/components/admin/admin-forms";
 import Link from "next/link";
 
 const ADMIN_EMAIL = "negraodenio@gmail.com";
+
+type Related<T> = T | T[] | null | undefined;
+
+type OrganizationRelation = {
+  name?: string | null;
+};
+
+type AdminProperty = {
+  id: string;
+  name: string;
+  organizationName?: string | null;
+  organizations?: Related<OrganizationRelation>;
+};
+
+type ProfileRow = AdminProfile & {
+  organizations?: Related<OrganizationRelation>;
+};
+
+function firstRelated<T>(value: Related<T>) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default async function AdminMasterPage() {
   const supabase = await createClient();
@@ -14,9 +39,9 @@ export default async function AdminMasterPage() {
     redirect("/dashboard");
   }
 
-  let organizations: any[] = [];
-  let properties: any[] = [];
-  let profiles: any[] = [];
+  let organizations: AdminOrganization[] = [];
+  let properties: AdminProperty[] = [];
+  let profiles: AdminProfile[] = [];
   let fetchError: string | null = null;
 
   try {
@@ -32,17 +57,17 @@ export default async function AdminMasterPage() {
     if (profilesRes.error) throw new Error("Profiles fetch: " + profilesRes.error.message);
 
     organizations = orgsRes.data || [];
-    properties = (propsRes.data || []).map((p: any) => ({
+    properties = ((propsRes.data || []) as AdminProperty[]).map((p) => ({
       ...p,
-      organizationName: p.organizations?.name
+      organizationName: firstRelated(p.organizations)?.name,
     }));
-    profiles = (profilesRes.data || []).map((p: any) => ({
+    profiles = ((profilesRes.data || []) as ProfileRow[]).map((p) => ({
       ...p,
-      organizationName: p.organizations?.name || "No Organization"
+      organizationName: firstRelated(p.organizations)?.name || "No Organization",
     }));
-  } catch (err: any) {
+  } catch (err) {
     console.error("Master Admin Fetch Error:", err);
-    fetchError = err.message;
+    fetchError = err instanceof Error ? err.message : "Unknown error";
   }
 
   return (
@@ -90,7 +115,7 @@ export default async function AdminMasterPage() {
               </h2>
             </div>
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              {organizations.map((org: any) => (
+              {organizations.map((org) => (
                 <div key={org.id} className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group">
                   <div className="flex justify-between items-center">
                     <span className="font-medium text-white text-lg">{org.name}</span>
@@ -110,7 +135,7 @@ export default async function AdminMasterPage() {
               </h2>
             </div>
             <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-              {properties.map((prop: any) => (
+              {properties.map((prop) => (
                 <div key={prop.id} className="p-5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all group">
                   <div className="flex justify-between items-start">
                     <div>

@@ -20,6 +20,8 @@ export async function getKnowledge(embedding: number[], propertyId: string) {
       p_property_id: propertyId,
     });
 
+    if (error) throw error;
+
     return data || [];
   } catch (err) {
     console.error("Failed to get knowledge:", err);

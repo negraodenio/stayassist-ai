@@ -1,13 +1,5 @@
 "use server";
 import { createClient, createAdminClient } from "@/utils/supabase/server";
-import { 
-  listAllOrganizations, 
-  createOrganization as dbCreateOrganization,
-  listAllProperties,
-  createProperty as dbCreateProperty,
-  createUnit as dbCreateUnit,
-  listAllProfiles
-} from "@/lib/supabase-rest";
 import { revalidatePath } from "next/cache";
 
 const ADMIN_EMAIL = "negraodenio@gmail.com";

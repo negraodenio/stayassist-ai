@@ -1,8 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { setupHotelAndUnits, addKnowledgeSnippet, uploadKnowledgeFile } from "@/app/dashboard/actions";
+import {
+  addKnowledgeSnippet,
+  setupHotelAndUnits,
+  updateWhatsAppAlertPhone,
+  uploadKnowledgeFile,
+  sendTestWhatsAppAlert,
+} from "@/app/dashboard/actions";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
 import { KnowledgeTestChat } from "./knowledge-test-chat";
@@ -70,17 +76,21 @@ export function DashboardShell({
   unitsCount,
   recentRequests,
   knowledge,
+  whatsappAlertPhone,
+  hasTwilioContentSid,
   userEmail,
 }: {
   properties: DashboardProperty[];
   unitsCount: number;
   recentRequests: DashboardRequest[];
   knowledge: DashboardKnowledge[];
+  whatsappAlertPhone?: string;
+  hasTwilioContentSid?: boolean;
   userEmail?: string;
 }) {
-  const [selectedPropertyId, setSelectedPropertyId] = (typeof window !== 'undefined') 
-    ? require('react').useState(properties[0]?.id || "")
-    : ["", () => {}];
+  const [selectedPropertyId, setSelectedPropertyId] = useState(
+    properties[0]?.id || "",
+  );
 
   const selectedProperty = properties.find(p => p.id === selectedPropertyId) || properties[0];
 
@@ -91,7 +101,7 @@ export function DashboardShell({
     null
   );
 
-  const [_addKnowledgeState, addKnowledgeAction, isAddKnowledgePending] = useActionState(
+  const [, addKnowledgeAction, isAddKnowledgePending] = useActionState(
     addKnowledgeSnippet,
     null
   );
@@ -100,6 +110,16 @@ export function DashboardShell({
     uploadKnowledgeFile,
     null
   );
+
+  const [whatsAppState, whatsAppAction, isWhatsAppPending] = useActionState(
+    updateWhatsAppAlertPhone,
+    null,
+  );
+
+  const [isTestPending, setIsTestPending] = useState(false);
+  const [testResult, setTestResult] = useState<{ error?: string; success?: boolean; message?: string } | null>(null);
+
+  const organizationId = properties[0]?.organization_id || "";
 
   const activeRequestsCount = recentRequests.filter(
     (r) => r.status !== "Completed" && r.status !== "Cancelled"
@@ -280,6 +300,86 @@ export function DashboardShell({
                       <p className="mt-3 text-sm font-medium text-navy/70">{metric.detail}</p>
                     </article>
                   ))}
+                </div>
+
+                <div className="mt-6 rounded-[24px] border border-border bg-white/80 p-6">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
+                        WhatsApp Alerts
+                      </p>
+                      <h3 className="mt-2 font-display text-2xl text-navy">
+                        Tenant notification phone
+                      </h3>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                        Guest requests from this organization will be sent to this WhatsApp number.
+                      </p>
+                    </div>
+
+                    <form action={whatsAppAction} className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[360px]">
+                      <label className="text-xs font-bold uppercase tracking-wider text-accent-strong">
+                        Recipient number
+                      </label>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <input
+                          name="whatsappAlertPhone"
+                          id="whatsappAlertPhone"
+                          type="tel"
+                          defaultValue={whatsappAlertPhone || ""}
+                          placeholder="+351912345678"
+                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            disabled={isWhatsAppPending}
+                            className="flex-1 rounded-xl bg-navy px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50 sm:flex-none"
+                          >
+                            {isWhatsAppPending ? "Saving..." : "Save"}
+                          </button>
+                          
+                          {whatsappAlertPhone && (
+                            <button
+                              type="button"
+                              disabled={isTestPending}
+                              onClick={async () => {
+                                setIsTestPending(true);
+                                setTestResult(null);
+                                try {
+                                  const res = await sendTestWhatsAppAlert(organizationId, whatsappAlertPhone);
+                                  setTestResult(res);
+                                } catch (e) {
+                                  setTestResult({ error: "Failed to trigger test." });
+                                } finally {
+                                  setIsTestPending(false);
+                                }
+                              }}
+                              className="flex-1 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-navy transition hover:bg-stone-50 disabled:opacity-50 sm:flex-none"
+                            >
+                              {isTestPending ? "Testing..." : "Test Alert"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {whatsAppState?.error && (
+                        <p className="text-xs text-red-600">{whatsAppState.error}</p>
+                      )}
+                      {whatsAppState?.success && (
+                        <p className="text-xs text-green-600">{whatsAppState.message}</p>
+                      )}
+                      {testResult?.error && (
+                        <p className="text-xs text-red-600 font-medium">Test failed: {testResult.error}</p>
+                      )}
+                      {testResult?.success && (
+                        <p className="text-xs text-green-600 font-medium">{testResult.message}</p>
+                      )}
+                      {!hasTwilioContentSid && (
+                        <p className="text-[10px] text-amber-600 mt-1 italic">
+                          Note: Ensure TWILIO_WHATSAPP_CONTENT_SID is configured for production templates.
+                        </p>
+                      )}
+                    </form>
+                  </div>
                 </div>
               </section>
 

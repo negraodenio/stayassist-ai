@@ -16,6 +16,12 @@ interface ChatMessage {
   isRAG?: boolean;
 }
 
+declare global {
+  interface Window {
+    __CHAT_LOADING__?: boolean;
+  }
+}
+
 type RequestState = "idle" | "loading" | "saving" | "error";
 
 type GuestRequestAppProps = {
@@ -40,11 +46,14 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
   const t = translations[lang];
 
   useEffect(() => {
-    // Detect language
-    const browserLang = navigator.language.split("-")[0] as SupportedLanguage;
-    if (translations[browserLang]) {
-      setLang(browserLang);
-    }
+    const timeoutId = window.setTimeout(() => {
+      const browserLang = navigator.language.split("-")[0] as SupportedLanguage;
+      if (translations[browserLang]) {
+        setLang(browserLang);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
@@ -129,7 +138,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     ]);
     setChatInput("");
     setChatLoading(true);
-    // @ts-ignore
     window.__CHAT_LOADING__ = true;
 
     const updateAssistant = (updater: (prev: string) => string) => {
@@ -204,7 +212,6 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
     } finally {
       clearTimeout(connectionTimeout);
       setChatLoading(false);
-      // @ts-ignore - Para diagnóstico via consola
       window.__CHAT_LOADING__ = false;
     }
   }
@@ -472,7 +479,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                                 className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] py-3 text-xs font-bold text-white transition hover:scale-[1.02] active:scale-95 shadow-sm"
                                 onClick={(e) => {
                                   // No PWA, às vezes o target _blank falha, vamos reforçar
-                                  if ((window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches) {
+                                  const standaloneNavigator = window.navigator as Navigator & { standalone?: boolean };
+                                  if (standaloneNavigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
                                     window.open(e.currentTarget.href, '_blank');
                                   }
                                 }}

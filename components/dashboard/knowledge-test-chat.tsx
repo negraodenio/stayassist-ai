@@ -9,11 +9,26 @@ interface LocalMessage {
   content: string;
 }
 
+type DebugInfo = {
+  debug: {
+    knowledge_used: number;
+    memory_used: number;
+    reranked: number;
+  };
+  sources?: string[];
+};
+
+declare global {
+  interface Window {
+    __CHAT_LOADING_ADMIN__?: boolean;
+  }
+}
+
 export function KnowledgeTestChat({ propertyId }: { propertyId: string }) {
   const [localInput, setLocalInput] = useState("");
   const [messages, setMessages] = useState<LocalMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo] = useState<DebugInfo | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -39,7 +54,6 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   ]);
   setLocalInput("");
   setIsLoading(true);
-  // @ts-ignore
   window.__CHAT_LOADING_ADMIN__ = true;
 
   // CORRECÇÃO: updater funcional em vez de valor direto — evita race condition
@@ -103,7 +117,6 @@ const handleManualSubmit = async (e: React.FormEvent) => {
   } finally {
     clearTimeout(timeoutId);
     setIsLoading(false);
-    // @ts-ignore
     window.__CHAT_LOADING_ADMIN__ = false;
   }
 };

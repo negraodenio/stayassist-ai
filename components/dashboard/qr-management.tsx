@@ -97,7 +97,7 @@ export function QrManagement() {
       setSelectedIds(new Set());
       setState("idle");
       setNotice(`Successfully generated ${successful.length} QR codes.`);
-    } catch (error) {
+    } catch {
       setNotice("Error generating some QR codes.");
       setState("error");
     }

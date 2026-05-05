@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   createGuestRequest,
+  getOrganizationWhatsAppAlertPhone,
   listGuestRequests,
 } from "@/lib/supabase-rest";
 import type { GuestRequestType } from "@/lib/guest-requests";
@@ -52,9 +53,22 @@ export async function POST(request: Request) {
     });
 
     try {
-      const alert = await sendRequestWhatsAppAlert(guestRequest);
+      const to = await getOrganizationWhatsAppAlertPhone(body.organizationId);
+      const alert = await sendRequestWhatsAppAlert(guestRequest, { to });
       if (alert.enabled && !alert.sent) {
-        console.error(`[WA ALERT FAIL] ${alert.error}`);
+        console.error(
+          `[WA ALERT FAIL] ${alert.error}`,
+          "status:",
+          alert.status || "unknown",
+          "code:",
+          alert.errorCode || "none",
+        );
+      } else if (alert.enabled) {
+        console.info(
+          `[WA ALERT SENT] ${alert.sid}`,
+          "status:",
+          alert.status || "unknown",
+        );
       }
     } catch (err) {
       console.error(`[WA ALERT CRASH]`, err);

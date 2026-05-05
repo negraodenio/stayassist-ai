@@ -1,10 +1,14 @@
-import { createClient } from "@/utils/supabase/server";
+import { createAdminClient, createClient } from "@/utils/supabase/server";
 import type {
   GuestOrganization,
   GuestRequestStatus,
   GuestRequestType,
   GuestUnit,
 } from "@/lib/guest-requests";
+import {
+  getTenantContext,
+  requireTenantOrganization,
+} from "@/lib/tenant-auth";
 
 const requestMessageByType: Record<GuestRequestType, string> = {
   towels: "Please send fresh towels.",
@@ -14,12 +18,81 @@ const requestMessageByType: Record<GuestRequestType, string> = {
   emergency: "EMERGENCY: I need immediate assistance!",
 };
 
+type Related<T> = T | T[] | null | undefined;
+
+type PropertyRelation = {
+  id?: string | null;
+  name?: string | null;
+  organization_id?: string | null;
+};
+
+type UnitRelation = {
+  id?: string | null;
+  name?: string | null;
+};
+
+type UnitRow = {
+  id: string;
+  name: string | null;
+  property_id: string | null;
+  qr_created_at?: string | null;
+  qr_regenerated_count?: number | null;
+  qr_token?: string | null;
+  properties?: Related<PropertyRelation>;
+};
+
+type RequestRow = {
+  id: string;
+  category: GuestRequestType;
+  created_at: string;
+  organization_id?: string | null;
+  property_id: string | null;
+  properties?: Related<PropertyRelation>;
+  status: GuestRequestStatus;
+  unit_id: string | null;
+  units?: Related<UnitRelation>;
+};
+
+function firstRelated<T>(value: Related<T>) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function mapUnit(unit: UnitRow): GuestUnit {
+  const property = firstRelated(unit.properties);
+
+  return {
+    id: unit.id,
+    name: unit.name || "Unnamed unit",
+    propertyId: unit.property_id || "",
+    propertyName: property?.name || "Unknown property",
+    organizationId: property?.organization_id || "",
+    qrToken: unit.qr_token || undefined,
+    qrCreatedAt: unit.qr_created_at || null,
+    qrRegeneratedCount: unit.qr_regenerated_count || 0,
+  };
+}
+
+function mapRequest(row: RequestRow) {
+  const property = firstRelated(row.properties);
+  const unit = firstRelated(row.units);
+
+  return {
+    id: row.id,
+    propertyId: row.property_id || "",
+    property: property?.name || "Unknown property",
+    unitId: row.unit_id || "",
+    room: unit?.name || "Unassigned unit",
+    type: row.category as GuestRequestType,
+    status: row.status as GuestRequestStatus,
+    createdAt: row.created_at,
+  };
+}
 
 export async function listGuestOptions(): Promise<{
   organizations: GuestOrganization[];
   units: GuestUnit[];
 }> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const [orgsResult, unitsResult] = await Promise.all([
     supabase.from("organizations").select("id, name").order("name", { ascending: true }),
@@ -30,31 +103,16 @@ export async function listGuestOptions(): Promise<{
   if (unitsResult.error) throw new Error(unitsResult.error.message);
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    organizations: orgsResult.data.map((org: any) => ({
+    organizations: (orgsResult.data || []).map((org) => ({
       id: org.id,
       name: org.name || "Unnamed organization",
     })),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    units: unitsResult.data.map((unit: any) => {
-      const property = Array.isArray(unit.properties) ? unit.properties[0] : unit.properties;
-
-      return {
-        id: unit.id,
-        name: unit.name || "Unnamed unit",
-        propertyId: unit.property_id || "",
-        propertyName: property?.name || "Unknown property",
-        organizationId: property?.organization_id || "",
-        qrToken: unit.qr_token || undefined,
-        qrCreatedAt: null,
-        qrRegeneratedCount: 0,
-      };
-    }),
+    units: ((unitsResult.data || []) as UnitRow[]).map(mapUnit),
   };
 }
 
 export async function getGuestUnitByToken(token: string) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("units")
@@ -66,20 +124,7 @@ export async function getGuestUnitByToken(token: string) {
     return { unit: null };
   }
 
-  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
-
-  return {
-    unit: {
-      id: data.id,
-      name: data.name || "Unnamed unit",
-      propertyId: data.property_id || "",
-      propertyName: property?.name || "Unknown property",
-      organizationId: property?.organization_id || "",
-      qrToken: data.qr_token || undefined,
-      qrCreatedAt: data.qr_created_at || null,
-      qrRegeneratedCount: data.qr_regenerated_count || 0,
-    },
-  };
+  return { unit: mapUnit(data as UnitRow) };
 }
 
 function generateQrToken() {
@@ -89,38 +134,33 @@ function generateQrToken() {
 }
 
 export async function listQrUnits(): Promise<GuestUnit[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const context = await getTenantContext();
+  requireTenantOrganization(context);
+
+  let query = context.admin
     .from("units")
     .select("id, name, qr_token, qr_created_at, qr_regenerated_count, property_id, properties(id, name, organization_id)")
     .order("name", { ascending: true });
 
+  if (!context.isSuperAdmin) {
+    query = query.eq("properties.organization_id", context.organizationId);
+  }
+
+  const { data, error } = await query;
+
   if (error) throw new Error(error.message);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return data.map((unit: any) => {
-    const property = Array.isArray(unit.properties) ? unit.properties[0] : unit.properties;
-    return {
-      id: unit.id,
-      name: unit.name || "Unnamed unit",
-      propertyId: unit.property_id || "",
-      propertyName: property?.name || "Unknown property",
-      organizationId: property?.organization_id || "",
-      qrToken: unit.qr_token || undefined,
-      qrCreatedAt: unit.qr_created_at || null,
-      qrRegeneratedCount: unit.qr_regenerated_count || 0,
-    };
-  });
+  return ((data || []) as UnitRow[]).map(mapUnit);
 }
 
 export async function generateMissingQrCodes() {
   const units = await listQrUnits();
   const missingUnits = units.filter((unit) => !unit.qrToken);
-  const supabase = await createClient();
+  const { admin } = await getTenantContext();
 
   await Promise.all(
     missingUnits.map((unit) =>
-      supabase
+      admin
         .from("units")
         .update({
           qr_token: generateQrToken(),
@@ -135,15 +175,26 @@ export async function generateMissingQrCodes() {
 }
 
 export async function regenerateUnitQrCode(unitId: string) {
-  const units = await listQrUnits();
-  const unit = units.find((item) => item.id === unitId);
+  const context = await getTenantContext();
+  requireTenantOrganization(context);
 
-  if (!unit) {
+  const { data: existingUnit, error: unitError } = await context.admin
+    .from("units")
+    .select("id, name, qr_token, qr_created_at, qr_regenerated_count, property_id, properties(id, name, organization_id)")
+    .eq("id", unitId)
+    .maybeSingle();
+
+  if (unitError) throw new Error(unitError.message);
+  if (!existingUnit) {
     throw new Error("Unit not found.");
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const unit = mapUnit(existingUnit as UnitRow);
+  if (!context.isSuperAdmin && unit.organizationId !== context.organizationId) {
+    throw new Error("Access denied for this unit.");
+  }
+
+  const { data, error } = await context.admin
     .from("units")
     .update({
       qr_token: generateQrToken(),
@@ -156,22 +207,11 @@ export async function regenerateUnitQrCode(unitId: string) {
 
   if (error) throw new Error(error.message);
 
-  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
-
-  return {
-    id: data.id,
-    name: data.name || "Unnamed unit",
-    propertyId: data.property_id || "",
-    propertyName: property?.name || "Unknown property",
-    organizationId: property?.organization_id || "",
-    qrToken: data.qr_token || undefined,
-    qrCreatedAt: data.qr_created_at || null,
-    qrRegeneratedCount: data.qr_regenerated_count || 0,
-  };
+  return mapUnit(data as UnitRow);
 }
 
 export async function listGuestRequests(unitId?: string) {
-  const supabase = await createClient();
+  const supabase = unitId ? createAdminClient() : (await getTenantContext()).admin;
   let query = supabase
     .from("requests")
     .select("id, organization_id, property_id, unit_id, category, status, created_at, properties(id, name), units(id, name)")
@@ -179,6 +219,12 @@ export async function listGuestRequests(unitId?: string) {
 
   if (unitId) {
     query = query.eq("unit_id", unitId);
+  } else {
+    const context = await getTenantContext();
+    requireTenantOrganization(context);
+    if (!context.isSuperAdmin) {
+      query = query.eq("organization_id", context.organizationId);
+    }
   }
 
   const { data, error } = await query;
@@ -186,22 +232,7 @@ export async function listGuestRequests(unitId?: string) {
   if (error) throw new Error(error.message);
 
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    requests: data.map((row: any) => {
-      const property = Array.isArray(row.properties) ? row.properties[0] : row.properties;
-      const unit = Array.isArray(row.units) ? row.units[0] : row.units;
-
-      return {
-        id: row.id,
-        propertyId: row.property_id || "",
-        property: property?.name || "Unknown property",
-        unitId: row.unit_id || "",
-        room: unit?.name || "Unassigned unit",
-        type: row.category as GuestRequestType,
-        status: row.status as GuestRequestStatus,
-        createdAt: row.created_at,
-      };
-    }),
+    requests: ((data || []) as RequestRow[]).map(mapRequest),
   };
 }
 
@@ -213,7 +244,24 @@ export async function createGuestRequest(input: {
 }) {
   const priority = input.type === "emergency" ? "high" : "normal";
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
+  const { data: unit, error: unitError } = await supabase
+    .from("units")
+    .select("id, property_id, properties(id, organization_id)")
+    .eq("id", input.unitId)
+    .maybeSingle<UnitRow>();
+
+  if (unitError) throw new Error(unitError.message);
+  if (!unit) throw new Error("Guest unit not found.");
+
+  const property = firstRelated(unit.properties);
+  if (
+    unit.property_id !== input.propertyId ||
+    property?.organization_id !== input.organizationId
+  ) {
+    throw new Error("Guest unit does not match the selected property.");
+  }
+
   const { data, error } = await supabase
     .from("requests")
     .insert({
@@ -231,27 +279,45 @@ export async function createGuestRequest(input: {
 
   if (error) throw new Error(error.message);
 
-  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
-  const unit = Array.isArray(data.units) ? data.units[0] : data.units;
+  return mapRequest(data as RequestRow);
+}
 
-  return {
-    id: data.id,
-    propertyId: data.property_id || "",
-    property: property?.name || "Unknown property",
-    unitId: data.unit_id || "",
-    room: unit?.name || "Unassigned unit",
-    type: data.category as GuestRequestType,
-    status: data.status as GuestRequestStatus,
-    createdAt: data.created_at,
-  };
+export async function getOrganizationWhatsAppAlertPhone(organizationId: string) {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("whatsapp_alert_phone")
+    .eq("id", organizationId)
+    .maybeSingle<{ whatsapp_alert_phone: string | null }>();
+
+  if (error) throw new Error(error.message);
+
+  return data?.whatsapp_alert_phone || null;
 }
 
 export async function updateGuestRequestStatus(
   id: string,
   status: GuestRequestStatus,
 ) {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  const context = await getTenantContext();
+  requireTenantOrganization(context);
+
+  const { data: existingRequest, error: requestError } = await context.admin
+    .from("requests")
+    .select("id, organization_id")
+    .eq("id", id)
+    .maybeSingle<{ id: string; organization_id: string | null }>();
+
+  if (requestError) throw new Error(requestError.message);
+  if (!existingRequest) throw new Error("Request not found.");
+  if (
+    !context.isSuperAdmin &&
+    existingRequest.organization_id !== context.organizationId
+  ) {
+    throw new Error("Access denied for this request.");
+  }
+
+  const { data, error } = await context.admin
     .from("requests")
     .update({ status })
     .eq("id", id)
@@ -260,19 +326,7 @@ export async function updateGuestRequestStatus(
 
   if (error) throw new Error(error.message);
 
-  const property = Array.isArray(data.properties) ? data.properties[0] : data.properties;
-  const unit = Array.isArray(data.units) ? data.units[0] : data.units;
-
-  return {
-    id: data.id,
-    propertyId: data.property_id || "",
-    property: property?.name || "Unknown property",
-    unitId: data.unit_id || "",
-    room: unit?.name || "Unassigned unit",
-    type: data.category as GuestRequestType,
-    status: data.status as GuestRequestStatus,
-    createdAt: data.created_at,
-  };
+  return mapRequest(data as RequestRow);
 }
 
 export async function listAllOrganizations() {
@@ -309,9 +363,9 @@ export async function listAllProperties(organizationId?: string) {
   const { data, error } = await query.order("name", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return data.map((prop: any) => ({
+  return (data || []).map((prop) => ({
     ...prop,
-    organizationName: prop.organizations?.name
+    organizationName: firstRelated(prop.organizations as Related<PropertyRelation>)?.name,
   }));
 }
 
@@ -345,7 +399,7 @@ export async function createUnit(name: string, propertyId: string) {
 }
 
 export async function getUserProfile(userId: string) {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("profiles")
     .select("role, organization_id, email")
@@ -369,10 +423,11 @@ export async function listAllProfiles() {
 
   if (error) throw new Error(error.message);
   
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return data.map((p: any) => ({
+  return (data || []).map((p) => ({
     ...p,
-    organizationName: p.organizations?.name || "No Organization"
+    organizationName:
+      firstRelated(p.organizations as Related<PropertyRelation>)?.name ||
+      "No Organization",
   }));
 }
 

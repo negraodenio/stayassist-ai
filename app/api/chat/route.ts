@@ -8,6 +8,7 @@ import { rerankChunks } from "@/lib/rerank";
 import { sendRequestWhatsAppAlert } from "@/lib/twilio-whatsapp";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import type { GuestRequestType } from "@/lib/guest-requests";
 
 const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -24,6 +25,35 @@ const ratelimit = process.env.UPSTASH_REDIS_REST_URL
   : null;
 
 export const maxDuration = 30;
+
+type ChatMessage = {
+  content: string;
+  role: "assistant" | "user";
+};
+
+type ChatRequestBody = {
+  isGuest?: boolean;
+  messages?: unknown;
+  propertyId?: string;
+  propertyName?: string;
+  sessionId?: string;
+  unitName?: string;
+};
+
+type KnowledgeChunk = {
+  content: string;
+  source_file?: string | null;
+};
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  if (!value || typeof value !== "object") return false;
+  const message = value as Partial<ChatMessage>;
+  return (
+    (message.role === "user" || message.role === "assistant") &&
+    typeof message.content === "string" &&
+    message.content.trim().length > 0
+  );
+}
 
 export async function POST(req: Request) {
   try {
@@ -44,21 +74,16 @@ export async function POST(req: Request) {
       }
     }
 
-    const body = await req.json();
+    const body = (await req.json()) as ChatRequestBody;
     const { messages: rawMessages, propertyId, propertyName, unitName, sessionId, isGuest } = body;
 
     const activeSession = sessionId || "admin-test-session";
 
     if (!propertyId) return new Response("Missing propertyId", { status: 400 });
 
-    const messages = (rawMessages || [])
-      .filter((m: any) =>
-        m &&
-        (m.role === "user" || m.role === "assistant") &&
-        typeof m.content === "string" &&
-        m.content.trim().length > 0
-      )
-      .map((m: any) => ({
+    const messages = (Array.isArray(rawMessages) ? rawMessages : [])
+      .filter(isChatMessage)
+      .map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.content.trim(),
       }));
@@ -74,7 +99,7 @@ export async function POST(req: Request) {
 
     let propAddress = "";
     let knowledgeContext = "Nenhuma informação específica encontrada.";
-    let sourcesUsed: string[] = [];
+    const sourcesUsed: string[] = [];
 
     try {
       const supabase = await createClient();
@@ -93,7 +118,7 @@ export async function POST(req: Request) {
         const queryEmbedding = await generateQueryEmbedding(userMessageContent);
         const ragChunks = await getKnowledge(queryEmbedding, propertyId);
         if (ragChunks?.length > 0) {
-          const combined = ragChunks.map((c: any) => {
+          const combined = (ragChunks as KnowledgeChunk[]).map((c) => {
             if (c.source_file) sourcesUsed.push(c.source_file);
             return c.content;
           });
@@ -123,11 +148,11 @@ DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o What
               property: finalPropertyName,
               unitId: "chat",
               room: finalUnitName,
-              type: "help" as any,
+              type: "help" as GuestRequestType,
               status: "Open",
               createdAt: new Date().toISOString(),
               guestMessage: userMessageContent,
-            } as any).catch((e) => console.error("WA Error", e));
+            }).catch((e) => console.error("WA Error", e));
           }
           await saveMemory({ propertyId, sessionId: activeSession, userType, role: "user", content: userMessageContent }).catch(() => {});
           await saveMemory({ propertyId, sessionId: activeSession, userType, role: "assistant", content: text }).catch(() => {});
