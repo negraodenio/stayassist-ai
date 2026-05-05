@@ -133,7 +133,7 @@ export async function POST(req: Request) {
     const systemPrompt = `You are StayAssist AI, a premium hotel concierge.
 HOTEL: ${finalPropertyName} | UNIT: ${finalUnitName} | LOCATION: ${propAddress}
 CONTEXT: ${knowledgeContext}
-DIRETRIZES: 1. Seja cordial. 2. Use o CONTEXTO. 3. Se não souber, sugira o WhatsApp.`;
+DIRETRIZES: 1. Responda sempre no mesmo idioma da pergunta do hóspede. 2. Seja cordial. 3. Use o CONTEXTO. 4. Se não souber, sugira o WhatsApp.`;
 
     const result = await streamText({
       model: openrouter("openai/gpt-4o-mini"),
