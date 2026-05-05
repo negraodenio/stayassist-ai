@@ -9,16 +9,17 @@ import {
   uploadKnowledgeFile,
   sendTestWhatsAppAlert,
 } from "@/app/dashboard/actions";
+import { KanbanBoard } from "./kanban-board";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
 import { KnowledgeTestChat } from "./knowledge-test-chat";
 
 const navigationItems = [
-  { id: "overview", label: "Overview", short: "OV", href: "/dashboard#overview" },
-  { id: "requests", label: "Requests", short: "RQ", href: "/dashboard/requests" },
-  { id: "qr", label: "QR Codes", short: "QR", href: "/dashboard/qr" },
-  { id: "properties", label: "Properties", short: "PR", href: "/dashboard#properties" },
-  { id: "knowledge", label: "Knowledge Base", short: "KB", href: "/dashboard#knowledge" },
+  { id: "overview", label: "Overview", short: "OV" },
+  { id: "requests", label: "Requests", short: "RQ" },
+  { id: "qr", label: "QR Codes", short: "QR" },
+  { id: "properties", label: "Properties", short: "PR" },
+  { id: "knowledge", label: "Knowledge Base", short: "KB" },
 ];
 
 function SectionHeading({
@@ -51,15 +52,15 @@ interface DashboardProperty {
   zip_code?: string;
 }
 
-
 interface DashboardRequest {
   id: string;
-  guest: string;
+  unit: string;
   property: string;
-  type: string;
-  status: string;
-  priority: string;
+  type: any;
+  status: any;
   createdAt: string;
+  assignedTo?: string | null;
+  issue?: string | null;
 }
 
 interface DashboardKnowledge {
@@ -79,6 +80,7 @@ export function DashboardShell({
   whatsappAlertPhone,
   hasTwilioContentSid,
   userEmail,
+  metrics,
 }: {
   properties: DashboardProperty[];
   unitsCount: number;
@@ -87,108 +89,68 @@ export function DashboardShell({
   whatsappAlertPhone?: string;
   hasTwilioContentSid?: boolean;
   userEmail?: string;
+  metrics: {
+    today: number;
+    week: number;
+    typeCounts: Record<string, number>;
+    topIssues: { topic: string; count: number }[];
+  };
 }) {
-  const [selectedPropertyId, setSelectedPropertyId] = useState(
-    properties[0]?.id || "",
-  );
+  const [activeTab, setActiveTab] = useState("overview");
+  const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id || "");
 
   const selectedProperty = properties.find(p => p.id === selectedPropertyId) || properties[0];
-
   const filteredKnowledge = knowledge.filter(k => k.property_id === selectedPropertyId);
 
-  const [setupState, setupAction, isSetupPending] = useActionState(
-    setupHotelAndUnits,
-    null
-  );
-
-  const [, addKnowledgeAction, isAddKnowledgePending] = useActionState(
-    addKnowledgeSnippet,
-    null
-  );
-
-  const [uploadState, uploadAction, isUploadPending] = useActionState(
-    uploadKnowledgeFile,
-    null
-  );
-
-  const [whatsAppState, whatsAppAction, isWhatsAppPending] = useActionState(
-    updateWhatsAppAlertPhone,
-    null,
-  );
+  const [setupState, setupAction, isSetupPending] = useActionState(setupHotelAndUnits, null);
+  const [, addKnowledgeAction, isAddKnowledgePending] = useActionState(addKnowledgeSnippet, null);
+  const [uploadState, uploadAction, isUploadPending] = useActionState(uploadKnowledgeFile, null);
+  const [whatsAppState, whatsAppAction, isWhatsAppPending] = useActionState(updateWhatsAppAlertPhone, null);
 
   const [isTestPending, setIsTestPending] = useState(false);
   const [testResult, setTestResult] = useState<{ error?: string; success?: boolean; message?: string } | null>(null);
 
   const organizationId = properties[0]?.organization_id || "";
 
-  const activeRequestsCount = recentRequests.filter(
-    (r) => r.status !== "Completed" && r.status !== "Cancelled"
-  ).length;
-
-  const metrics = [
-    {
-      label: "Properties",
-      value: properties.length.toString(),
-      detail: "Active in portfolio",
-    },
-    {
-      label: "Total Units",
-      value: unitsCount.toString(),
-      detail: "Managed rooms/suites",
-    },
-    {
-      label: "Recent Requests",
-      value: recentRequests.length.toString(),
-      detail: `${activeRequestsCount} currently active`,
-    },
-  ];
-
   return (
     <div className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-7xl gap-4 lg:gap-6">
+        
+        {/* Sidebar */}
         <aside className="glass-panel hidden w-80 shrink-0 rounded-[28px] p-6 lg:flex lg:flex-col">
           <div className="mb-8 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-                Malia Concierge
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">Malia Concierge</p>
               <h1 className="mt-2 font-display text-3xl text-navy">Operations</h1>
             </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-navy text-sm font-semibold text-white">
-              MC
-            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-navy text-sm font-semibold text-white">MC</div>
           </div>
 
           <nav className="space-y-2">
-            {navigationItems.map((item) => {
-              const isActive = typeof window !== "undefined" && window.location.hash === item.href.split("#")[1] || (item.id === "overview" && (typeof window !== "undefined" && !window.location.hash));
-              
-              return (
-                <a
-                  key={item.id}
-                  href={item.href}
-                  className={`flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-white/70 ${
-                    isActive ? "bg-white text-navy luxury-ring" : "text-muted"
-                  }`}
-                >
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em] text-accent-strong">
-                    {item.short}
-                  </span>
-                  <div>
-                    <p className="font-semibold">{item.label}</p>
-                    <p className="text-xs uppercase tracking-[0.24em] opacity-70">Module</p>
-                  </div>
-                </a>
-              );
-            })}
+            {navigationItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-white/70 ${
+                  activeTab === item.id ? "bg-white text-navy luxury-ring shadow-sm" : "text-muted"
+                }`}
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em] text-accent-strong">
+                  {item.short}
+                </span>
+                <div className="text-left">
+                  <p className="font-semibold">{item.label}</p>
+                  <p className="text-xs uppercase tracking-[0.24em] opacity-70">Module</p>
+                </div>
+              </button>
+            ))}
+            
             {userEmail === "negraodenio@gmail.com" && (
               <Link
                 href="/admin-master"
                 className="flex items-center gap-4 rounded-2xl px-4 py-3 bg-amber-500/10 text-amber-600 transition hover:bg-amber-500/20 luxury-ring"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-xs font-semibold tracking-[0.2em] text-white">
-                  MA
-                </span>
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-xs font-semibold tracking-[0.2em] text-white">MA</span>
                 <div>
                   <p className="font-semibold italic">Master Admin</p>
                   <p className="text-xs uppercase tracking-[0.24em] opacity-70 italic">Control Panel</p>
@@ -202,26 +164,21 @@ export function DashboardShell({
               onClick={() => signOut()}
               className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-muted transition hover:bg-red-50 hover:text-red-600"
             >
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em]">
-                LO
-              </span>
-              <div>
-                <p className="font-semibold text-left">Logout</p>
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em]">LO</span>
+              <div className="text-left">
+                <p className="font-semibold">Logout</p>
                 <p className="text-xs uppercase tracking-[0.24em] opacity-70">Exit Session</p>
               </div>
             </button>
           </div>
         </aside>
 
-        <main className="glass-panel flex-1 rounded-[30px] p-5 sm:p-7 lg:p-8">
+        {/* Main Content */}
+        <main className="glass-panel flex-1 rounded-[30px] p-5 sm:p-7 lg:p-8 overflow-hidden">
           <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-                Concierge Command Center
-              </p>
-              <h1 className="mt-2 font-display text-4xl tracking-tight text-navy sm:text-5xl">
-                Dashboard
-              </h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">Concierge Command Center</p>
+              <h1 className="mt-2 font-display text-4xl tracking-tight text-navy sm:text-5xl">Dashboard</h1>
             </div>
           </div>
 
@@ -233,446 +190,240 @@ export function DashboardShell({
                   title="Create your first property"
                   description="Your database is ready. Let's create your hotel and automatically generate the units so you can start testing."
                 />
-                
                 <form action={setupAction} className="mt-8 flex flex-col gap-5">
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-navy">
-                      Property Name
-                    </label>
-                    <input
-                      name="hotelName"
-                      type="text"
-                      required
-                      placeholder="e.g. Monarch Bay Hotel"
-                      className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                    />
+                    <label className="mb-2 block text-sm font-semibold text-navy">Property Name</label>
+                    <input name="hotelName" type="text" required placeholder="e.g. Monarch Bay Hotel" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent" />
                   </div>
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-navy">
-                      Number of Units/Rooms
-                    </label>
-                    <input
-                      name="unitsCount"
-                      type="number"
-                      required
-                      min="1"
-                      max="200"
-                      defaultValue="10"
-                      className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                    />
-                    <p className="mt-2 text-xs text-muted">
-                      We will automatically generate rooms named &quot;Room 101&quot;, &quot;Room 102&quot;, etc.
-                    </p>
+                    <label className="mb-2 block text-sm font-semibold text-navy">Number of Units/Rooms</label>
+                    <input name="unitsCount" type="number" required min="1" max="200" defaultValue="10" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent" />
                   </div>
-
-                  {setupState?.error && (
-                    <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">
-                      {setupState.error}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={isSetupPending}
-                    className="mt-2 rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50"
-                  >
+                  {setupState?.error && <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600">{setupState.error}</div>}
+                  <button type="submit" disabled={isSetupPending} className="mt-2 rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50">
                     {isSetupPending ? "Initializing..." : "Create Property & Units"}
                   </button>
                 </form>
               </div>
             </section>
           ) : (
-            <>
-              <section id="overview" className="pt-8">
-                <SectionHeading
-                  eyebrow="Overview"
-                  title="Live Operations"
-                  description="A premium control layer for reservations, concierge, and guest service operations with AI-guided actions."
-                />
-                <div className="section-grid mt-6 grid gap-4">
-                  {metrics.map((metric) => (
-                    <article
-                      key={metric.label}
-                      className="rounded-[24px] border border-border bg-white/80 p-5"
-                    >
-                      <p className="text-sm text-muted">{metric.label}</p>
-                      <p className="mt-4 font-display text-5xl text-navy">{metric.value}</p>
-                      <p className="mt-3 text-sm font-medium text-navy/70">{metric.detail}</p>
-                    </article>
-                  ))}
-                </div>
-
-                <div className="mt-6 rounded-[24px] border border-border bg-white/80 p-6">
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
-                        WhatsApp Alerts
-                      </p>
-                      <h3 className="mt-2 font-display text-2xl text-navy">
-                        Tenant notification phone
-                      </h3>
-                      <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-                        Guest requests from this organization will be sent to this WhatsApp number.
-                      </p>
-                    </div>
-
-                    <form action={whatsAppAction} className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[360px]">
-                      <label className="text-xs font-bold uppercase tracking-wider text-accent-strong">
-                        Recipient number
-                      </label>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <input
-                          name="whatsappAlertPhone"
-                          id="whatsappAlertPhone"
-                          type="tel"
-                          defaultValue={whatsappAlertPhone || ""}
-                          placeholder="+351912345678"
-                          className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="submit"
-                            disabled={isWhatsAppPending}
-                            className="flex-1 rounded-xl bg-navy px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50 sm:flex-none"
-                          >
-                            {isWhatsAppPending ? "Saving..." : "Save"}
-                          </button>
-                          
-                          {whatsappAlertPhone && (
-                            <button
-                              type="button"
-                              disabled={isTestPending}
-                              onClick={async () => {
-                                setIsTestPending(true);
-                                setTestResult(null);
-                                try {
-                                  const res = await sendTestWhatsAppAlert(organizationId, whatsappAlertPhone);
-                                  setTestResult(res);
-                                } catch (e) {
-                                  setTestResult({ error: "Failed to trigger test." });
-                                } finally {
-                                  setIsTestPending(false);
-                                }
-                              }}
-                              className="flex-1 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-navy transition hover:bg-stone-50 disabled:opacity-50 sm:flex-none"
-                            >
-                              {isTestPending ? "Testing..." : "Test Alert"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {whatsAppState?.error && (
-                        <p className="text-xs text-red-600">{whatsAppState.error}</p>
-                      )}
-                      {whatsAppState?.success && (
-                        <p className="text-xs text-green-600">{whatsAppState.message}</p>
-                      )}
-                      {testResult?.error && (
-                        <p className="text-xs text-red-600 font-medium">Test failed: {testResult.error}</p>
-                      )}
-                      {testResult?.success && (
-                        <p className="text-xs text-green-600 font-medium">{testResult.message}</p>
-                      )}
-                      {!hasTwilioContentSid && (
-                        <p className="text-[10px] text-amber-600 mt-1 italic">
-                          Note: Ensure TWILIO_WHATSAPP_CONTENT_SID is configured for production templates.
-                        </p>
-                      )}
-                    </form>
-                  </div>
-                </div>
-              </section>
-
-              <section id="requests" className="pt-10">
-                <SectionHeading
-                  eyebrow="Requests"
-                  title="Recent guest requests"
-                  description="Track inbound requests, expected fulfillment time, and service priority from one elegant workflow."
-                />
-                
-                {recentRequests.length === 0 ? (
-                  <div className="mt-6 rounded-[24px] border border-border bg-white/50 p-8 text-center text-muted">
-                    No requests found. Scan a QR code to create one!
-                  </div>
-                ) : (
-                  <div className="mt-6 overflow-hidden rounded-[26px] border border-border bg-white/82">
-                    <div className="grid grid-cols-4 gap-4 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-                      <span>Guest Unit</span>
-                      <span>Request</span>
-                      <span>Status</span>
-                      <span>Time</span>
-                    </div>
-                    {recentRequests.map((row) => (
-                      <div
-                        key={row.id}
-                        className="grid grid-cols-2 gap-4 border-b border-border/70 px-5 py-4 text-sm text-navy last:border-b-0 sm:grid-cols-4 items-center"
-                      >
-                        <span className="font-semibold">{row.guest}</span>
-                        <span className="capitalize">{row.type}</span>
-                        <span className={`px-2 py-1 rounded-full text-xs max-w-fit font-medium ${
-                          row.status === "Completed" ? "bg-green-100 text-green-700" :
-                          row.status === "In Progress" ? "bg-amber-100 text-amber-700" :
-                          "bg-blue-100 text-blue-700"
-                        }`}>
-                          {row.status}
-                        </span>
-                        <span className="text-muted text-xs">
-                          {formatDistanceToNow(new Date(row.createdAt), { addSuffix: true })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <a
-                    href="/dashboard/requests"
-                    className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
-                  >
-                    Open request board
-                  </a>
-                </div>
-              </section>
-
-              <section id="properties" className="pt-10">
-                <SectionHeading
-                  eyebrow="Properties"
-                  title="Portfolio visibility"
-                  description="Active properties currently managed by Malia Concierge. Configure location for Google Places search."
-                />
-                
-                <div className="mt-8 grid gap-6 xl:grid-cols-[1fr_400px]">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    {properties.map((property) => (
-                      <article
-                        key={property.id}
-                        className={`rounded-[24px] border p-6 transition cursor-pointer ${
-                          selectedPropertyId === property.id 
-                            ? "border-accent bg-white shadow-md luxury-ring" 
-                            : "border-border bg-white/60 hover:bg-white"
-                        }`}
-                        onClick={() => setSelectedPropertyId(property.id)}
-                      >
-                        <h3 className="font-display text-2xl text-navy">{property.name}</h3>
-                        <p className="mt-2 text-xs text-muted">ID: {property.id}</p>
-                        <div className="mt-6 flex items-center justify-between text-sm text-muted">
-                          <span className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full ${property.latitude ? "bg-success" : "bg-stone-300"}`}></span>
-                            {property.latitude ? "Location Set" : "Location Pending"}
-                          </span>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-
-                  <div className="rounded-[28px] border border-border bg-white p-8 shadow-sm">
-                    <h3 className="text-xl font-display text-navy mb-6">Location Settings</h3>
-                    <p className="text-sm text-muted mb-6">Set the physical location for <strong>{selectedProperty?.name}</strong> to enable Google Places searching.</p>
-                    
-                    <form action={async (fd) => {
-                      const m = await import("@/app/dashboard/actions");
-                      const res = await m.updatePropertyLocation(null, fd);
-                      if (res?.success) alert("Location updated successfully!");
-                      else if (res?.error) alert(res.error);
-                    }} className="flex flex-col gap-5">
-                      <input type="hidden" name="propertyId" value={selectedPropertyId} />
-                      
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">Full Address</label>
-                          <input
-                            name="address"
-                            type="text"
-                            defaultValue={selectedProperty?.address || ""}
-                            placeholder="e.g. Rua Augusta, 100, Lisboa"
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">CEP / Postal Code</label>
-                          <input
-                            name="zip_code"
-                            type="text"
-                            defaultValue={selectedProperty?.zip_code || ""}
-                            placeholder="e.g. 1200-000"
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">Latitude</label>
-                          <input
-                            name="latitude"
-                            type="number"
-                            step="any"
-                            defaultValue={selectedProperty?.latitude || ""}
-                            placeholder="e.g. 38.710"
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">Longitude</label>
-                          <input
-                            name="longitude"
-                            type="number"
-                            step="any"
-                            defaultValue={selectedProperty?.longitude || ""}
-                            placeholder="e.g. -9.139"
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        type="submit"
-                        className="mt-4 rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
-                      >
-                        Save Property Location
-                      </button>
-                    </form>
-                    
-                    <p className="mt-6 text-[10px] text-muted leading-relaxed italic">
-                      * Coordenadas são necessárias para buscas precisas. Podes encontrá-las clicando com o botão direito no local no Google Maps.
-                    </p>
-                  </div>
-                </div>
-              </section>
-
-
-              <section id="knowledge" className="pt-10">
-                <div className="flex flex-col gap-4 border-b border-border pb-6 sm:flex-row sm:items-end sm:justify-between">
-                  <SectionHeading
-                    eyebrow="AI Concierge"
-                    title="Knowledge Base"
-                    description="Add rules, hours, and information that the AI Concierge will use to answer guest questions."
-                  />
+            <div className="mt-8 space-y-12">
+              
+              {/* --- OVERVIEW TAB --- */}
+              {activeTab === "overview" && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <SectionHeading eyebrow="Overview" title="Live Operations" description="Real-time control layer for guest service operations." />
                   
-                  <div className="flex flex-col gap-2 min-w-[240px]">
-                    <label className="text-xs font-bold uppercase tracking-wider text-accent-strong">Active Property</label>
-                    <select 
-                      value={selectedPropertyId}
-                      onChange={(e) => setSelectedPropertyId(e.target.value)}
-                      className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-navy luxury-ring outline-none"
-                    >
-                      {properties.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                    <MetricCard title="Requests Today" value={metrics.today} color="bg-amber-400" />
+                    <MetricCard title="Last 7 Days" value={metrics.week} color="bg-blue-400" />
+                    <MetricCard title="Properties" value={properties.length} color="bg-purple-400" />
+                    <MetricCard title="Total Units" value={unitsCount} color="bg-emerald-400" />
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+                    {/* Service distribution */}
+                    <div className="glass-panel rounded-[32px] bg-white/40 p-8 luxury-ring">
+                      <h3 className="font-display text-2xl font-bold text-navy mb-6">Service Distribution</h3>
+                      <div className="space-y-4">
+                        {Object.entries(metrics.typeCounts).map(([type, count]) => (
+                          <div key={type} className="flex items-center justify-between group">
+                            <span className="text-sm font-medium text-navy capitalize">{type.replace('_', ' ')}</span>
+                            <span className="font-mono text-sm font-bold text-navy">{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Top Maintenance Issues */}
+                    <div className="glass-panel rounded-[32px] bg-white/40 p-8 luxury-ring">
+                      <div className="mb-6 flex items-center justify-between">
+                        <h3 className="font-display text-2xl font-bold text-navy">Top Issues</h3>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Action Required</span>
+                      </div>
+                      <div className="space-y-4">
+                        {metrics.topIssues.map((issue, idx) => (
+                          <div key={idx} className="flex items-center justify-between group">
+                            <span className="text-sm font-medium text-navy">{issue.topic}</span>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold shadow-sm">{issue.count} cases</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* WhatsApp Alerts Configuration */}
+                  <div className="mt-6 rounded-[24px] border border-border bg-white/80 p-6">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">WhatsApp Alerts</p>
+                        <h3 className="mt-2 font-display text-2xl text-navy">Tenant notification phone</h3>
+                        <p className="mt-2 max-w-2xl text-sm text-muted">Guest requests from this organization will be sent to this WhatsApp number.</p>
+                      </div>
+                      <form action={whatsAppAction} className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-[360px]">
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                          <input name="whatsappAlertPhone" type="tel" defaultValue={whatsappAlertPhone || ""} placeholder="+351..." className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent" />
+                          <div className="flex gap-2">
+                            <button type="submit" disabled={isWhatsAppPending} className="flex-1 rounded-xl bg-navy px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50">
+                              {isWhatsAppPending ? "Saving..." : "Save"}
+                            </button>
+                            {whatsappAlertPhone && (
+                              <button
+                                type="button"
+                                disabled={isTestPending}
+                                onClick={async () => {
+                                  setIsTestPending(true);
+                                  setTestResult(null);
+                                  try {
+                                    const res = await sendTestWhatsAppAlert(organizationId, whatsappAlertPhone);
+                                    setTestResult(res);
+                                  } catch (e) {
+                                    setTestResult({ error: "Failed to trigger test." });
+                                  } finally {
+                                    setIsTestPending(false);
+                                  }
+                                }}
+                                className="flex-1 rounded-xl border border-border bg-white px-5 py-3 text-sm font-semibold text-navy hover:bg-stone-50 transition"
+                              >
+                                {isTestPending ? "..." : "Test"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {testResult?.success && <p className="text-[10px] text-green-600 font-medium">{testResult.message}</p>}
+                        {!hasTwilioContentSid && <p className="text-[10px] text-amber-600 italic">Note: Missing WhatsApp Template SID.</p>}
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- REQUESTS TAB (KANBAN) --- */}
+              {activeTab === "requests" && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <SectionHeading eyebrow="Operations" title="Operational Board" description="Manage guest requests in real-time." />
+                  <KanbanBoard initialRequests={recentRequests as any} />
+                </div>
+              )}
+
+              {/* --- PROPERTIES TAB --- */}
+              {activeTab === "properties" && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <SectionHeading eyebrow="Properties" title="Portfolio visibility" description="Manage your property locations and settings." />
+                  <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      {properties.map((property) => (
+                        <article
+                          key={property.id}
+                          className={`rounded-[24px] border p-6 transition cursor-pointer ${
+                            selectedPropertyId === property.id ? "border-accent bg-white shadow-md luxury-ring" : "border-border bg-white/60 hover:bg-white"
+                          }`}
+                          onClick={() => setSelectedPropertyId(property.id)}
+                        >
+                          <h3 className="font-display text-2xl text-navy">{property.name}</h3>
+                          <p className="mt-2 text-[10px] text-muted">ID: {property.id}</p>
+                          <div className="mt-6 flex items-center justify-between text-xs text-muted">
+                            <span className="flex items-center gap-2">
+                              <span className={`h-2 w-2 rounded-full ${property.latitude ? "bg-emerald-500" : "bg-stone-300"}`}></span>
+                              {property.latitude ? "Location Set" : "Pending"}
+                            </span>
+                          </div>
+                        </article>
                       ))}
+                    </div>
+
+                    <div className="rounded-[28px] border border-border bg-white p-8 shadow-sm h-fit">
+                      <h3 className="text-xl font-display text-navy mb-6">Location Settings</h3>
+                      <form action={async (fd) => {
+                        const m = await import("@/app/dashboard/actions");
+                        const res = await m.updatePropertyLocation(null, fd);
+                        if (res?.success) alert("Location updated!");
+                        else if (res?.error) alert(res.error);
+                      }} className="flex flex-col gap-5">
+                        <input type="hidden" name="propertyId" value={selectedPropertyId} />
+                        <div>
+                          <label className="mb-2 block text-xs font-bold uppercase text-navy">Full Address</label>
+                          <input name="address" type="text" defaultValue={selectedProperty?.address || ""} className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <input name="latitude" type="number" step="any" defaultValue={selectedProperty?.latitude || ""} placeholder="Lat" className="rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          <input name="longitude" type="number" step="any" defaultValue={selectedProperty?.longitude || ""} placeholder="Lng" className="rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                        </div>
+                        <button type="submit" className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]">Save Location</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- KNOWLEDGE TAB --- */}
+              {activeTab === "knowledge" && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <div className="flex items-end justify-between border-b border-border pb-6">
+                    <SectionHeading eyebrow="AI Concierge" title="Knowledge Base" description="Train your AI assistant with hotel information." />
+                    <select value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-navy outline-none">
+                      {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
-                </div>
 
-                <div className="mt-6 grid gap-6 xl:grid-cols-2">
-                  <div className="flex flex-col gap-6">
-                    <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
-                      <h3 className="text-lg font-semibold text-navy mb-4">Add Information to {selectedProperty?.name}</h3>
-                      <form action={addKnowledgeAction} className="flex flex-col gap-4">
-                        <input type="hidden" name="propertyId" value={selectedPropertyId} />
+                  <div className="grid gap-8 xl:grid-cols-2">
+                    <div className="space-y-6">
+                      <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
+                        <h3 className="text-lg font-bold text-navy mb-4">Add Snippet</h3>
+                        <form action={addKnowledgeAction} className="space-y-4">
+                          <input type="hidden" name="propertyId" value={selectedPropertyId} />
+                          <input name="topic" type="text" required placeholder="Topic" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          <textarea name="content" required rows={4} placeholder="Content..." className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none resize-none" />
+                          <button type="submit" disabled={isAddKnowledgePending} className="w-full rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]">Save</button>
+                        </form>
+                      </div>
 
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">Topic</label>
-                          <input
-                            name="topic"
-                            type="text"
-                            required
-                            placeholder="e.g. Breakfast Hours"
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-2 block text-sm font-semibold text-navy">Content</label>
-                          <textarea
-                            name="content"
-                            required
-                            rows={4}
-                            placeholder="e.g. Breakfast is served from 07:00 to 10:30 at the main restaurant."
-                            className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-accent resize-none"
-                          ></textarea>
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={isAddKnowledgePending}
-                          className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50"
-                        >
-                          {isAddKnowledgePending ? "Saving..." : "Save Information"}
-                        </button>
-                      </form>
+                      <div className="rounded-[24px] border border-border bg-stone-50/50 p-6">
+                        <h3 className="text-lg font-bold text-navy mb-2">Upload Document</h3>
+                        <form action={uploadAction} className="space-y-4">
+                          <input type="hidden" name="propertyId" value={selectedPropertyId} />
+                          <input name="file" type="file" required accept=".pdf,.txt" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-navy file:text-white" />
+                          <button type="submit" disabled={isUploadPending} className="w-full rounded-xl border border-navy px-4 py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white">Upload</button>
+                        </form>
+                      </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-border bg-stone-50/50 p-6 shadow-sm">
-                      <h3 className="text-lg font-semibold text-navy mb-4">Upload Document</h3>
-                      <p className="text-xs text-muted mb-4">Upload a PDF or TXT file to train the AI for {selectedProperty?.name}.</p>
-                      <form action={uploadAction} className="flex flex-col gap-4">
-                        <input type="hidden" name="propertyId" value={selectedPropertyId} />
-
-                        <input
-                          name="file"
-                          type="file"
-                          required
-                          accept=".pdf,.txt"
-                          className="w-full text-sm text-muted file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy file:text-white hover:file:bg-[#1c4755]"
-                        />
-                        {uploadState?.error && (
-                          <p className="text-xs text-red-600">{uploadState.error}</p>
-                        )}
-                        <button
-                          type="submit"
-                          disabled={isUploadPending}
-                          className="rounded-xl border border-navy px-4 py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white disabled:opacity-50"
-                        >
-                          {isUploadPending ? "Processing..." : "Upload & Parse Document"}
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-4">
-                    {selectedPropertyId && (
+                    <div className="space-y-6">
                       <KnowledgeTestChat propertyId={selectedPropertyId} />
-                    )}
-                    
-                    <div className="mt-2">
-                      <h3 className="text-sm font-bold uppercase tracking-widest text-accent-strong mb-4">Existing Knowledge ({filteredKnowledge.length})</h3>
-                      <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                        {filteredKnowledge.length === 0 ? (
-                          <div className="rounded-[24px] border border-dashed border-border bg-white/50 p-8 text-center text-muted">
-                            No knowledge added for this property.
-                          </div>
-                        ) : (
-                          filteredKnowledge.map((item) => (
-                            <div key={item.id} className="group relative rounded-2xl border border-border bg-white/60 p-4 text-xs transition hover:bg-white hover:shadow-md">
-                              <div className="flex justify-between items-start mb-2">
-                                <h4 className="font-bold text-navy">{item.topic}</h4>
-                                <button
-                                  onClick={async () => {
-                                    if (confirm("Delete this information?")) {
-                                      const m = await import("@/app/dashboard/actions");
-                                      await m.deleteKnowledgeSnippet(item.id);
-                                      window.location.reload();
-                                    }
-                                  }}
-                                  className="text-red-400 hover:text-red-600 transition"
-                                  title="Delete"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                </button>
-                              </div>
-                              <p className="text-muted leading-relaxed line-clamp-3">{item.content}</p>
-                              {item.source_file && (
-                                <span className="mt-2 block text-[10px] text-accent-strong font-medium">Source: {item.source_file}</span>
-                              )}
+                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted">Database ({filteredKnowledge.length})</h4>
+                        {filteredKnowledge.map(item => (
+                          <div key={item.id} className="rounded-2xl border border-border bg-white/60 p-4 text-xs group hover:bg-white transition-all">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className="font-bold text-navy">{item.topic}</span>
+                              <button onClick={async () => { if(confirm("Delete?")) { const m = await import("@/app/dashboard/actions"); await m.deleteKnowledgeSnippet(item.id); window.location.reload(); } }} className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">Delete</button>
                             </div>
-                          ))
-                        )}
+                            <p className="text-muted line-clamp-3">{item.content}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
-
                 </div>
-              </section>
-            </>
+              )}
+
+            </div>
           )}
         </main>
       </div>
+    </div>
+  );
+}
+
+function MetricCard({ title, value, color }: { title: string; value: number | string; color: string }) {
+  return (
+    <div className="glass-panel group relative overflow-hidden rounded-[28px] bg-white/40 p-6 transition-all hover:bg-white/60 luxury-ring">
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-bold uppercase tracking-widest text-muted/60">{title}</span>
+        <span className="font-display text-4xl font-bold text-navy">{value}</span>
+      </div>
+      <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full ${color}/10 blur-2xl transition-all group-hover:${color}/20`}></div>
     </div>
   );
 }

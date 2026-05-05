@@ -43,7 +43,46 @@ export default async function DashboardPage() {
     whatsappAlertPhone = organization?.whatsapp_alert_phone || "";
   }
 
-  // Build filtered queries
+  // --- Metrics Calculation (Multi-tenant) ---
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  const startOfWeek = new Date();
+  startOfWeek.setUTCDate(startOfWeek.getUTCDate() - 7);
+
+  // 1. Requests Today
+  let todayQuery = admin
+    .from("requests")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startOfToday.toISOString());
+
+  // 2. Requests This Week
+  let weekQuery = admin
+    .from("requests")
+    .select("id", { count: "exact", head: true })
+    .gte("created_at", startOfWeek.toISOString());
+
+  // 3. Requests by Type (All time for analytics)
+  let byTypeQuery = admin
+    .from("requests")
+    .select("category");
+
+  // 4. Top Issues
+  let issuesQuery = admin
+    .from("requests")
+    .select("issue")
+    .eq("category", "issue")
+    .not("issue", "is", null);
+
+  // Apply filters
+  if (!isSuperAdmin && orgId) {
+    todayQuery = todayQuery.eq("organization_id", orgId);
+    weekQuery = weekQuery.eq("organization_id", orgId);
+    byTypeQuery = byTypeQuery.eq("organization_id", orgId);
+    issuesQuery = issuesQuery.eq("organization_id", orgId);
+  }
+
+  // --- Main Dashboard Data ---
   let propertiesQuery = admin
     .from("properties")
     .select("id, name, organization_id, address, latitude, longitude")
@@ -56,31 +95,38 @@ export default async function DashboardPage() {
   let requestsQuery = admin
     .from("requests")
     .select(
-      "id, category, status, created_at, guest_name, priority, properties(name), units(name), organization_id"
+      "id, category, status, created_at, guest_name, priority, issue, assigned_to, properties(name), units(name), organization_id"
     )
     .order("created_at", { ascending: false })
-    .limit(4);
+    .limit(100); // Fetch more for Kanban
 
   let knowledgeQuery = admin
     .from("property_knowledge")
     .select("id, property_id, topic, content, created_at, properties!inner(organization_id)")
     .order("created_at", { ascending: false });
 
-  // Apply organization filter if not superadmin
   if (!isSuperAdmin && orgId) {
     propertiesQuery = propertiesQuery.eq("organization_id", orgId);
     unitsQuery = unitsQuery.eq("properties.organization_id", orgId);
     requestsQuery = requestsQuery.eq("organization_id", orgId);
     knowledgeQuery = knowledgeQuery.eq("properties.organization_id", orgId);
-  } else if (!isSuperAdmin) {
-    propertiesQuery = propertiesQuery.eq("organization_id", "__missing_org__");
-    unitsQuery = unitsQuery.eq("properties.organization_id", "__missing_org__");
-    requestsQuery = requestsQuery.eq("organization_id", "__missing_org__");
-    knowledgeQuery = knowledgeQuery.eq("properties.organization_id", "__missing_org__");
   }
 
-  // Fetch dashboard metrics in parallel
-  const [propertiesRes, unitsRes, requestsRes, knowledgeRes] = await Promise.all([
+  // Parallel Execution
+  const [
+    todayRes,
+    weekRes,
+    byTypeRes,
+    issuesRes,
+    propertiesRes,
+    unitsRes,
+    requestsRes,
+    knowledgeRes,
+  ] = await Promise.all([
+    todayQuery,
+    weekQuery,
+    byTypeQuery,
+    issuesQuery,
     propertiesQuery,
     unitsQuery,
     requestsQuery,
@@ -91,7 +137,23 @@ export default async function DashboardPage() {
   const unitsCount = unitsRes.count || 0;
   const knowledge = knowledgeRes.data || [];
   
-  const recentRequests = ((requestsRes.data || []) as DashboardRequestRow[]).map((req) => {
+  // Analytics processing
+  const typeCounts: Record<string, number> = {};
+  (byTypeRes.data || []).forEach(r => {
+    typeCounts[r.category] = (typeCounts[r.category] || 0) + 1;
+  });
+
+  const issueCounts: Record<string, number> = {};
+  (issuesRes.data || []).forEach(r => {
+    if (r.issue) issueCounts[r.issue] = (issueCounts[r.issue] || 0) + 1;
+  });
+
+  const topIssues = Object.entries(issueCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([topic, count]) => ({ topic, count }));
+
+  const recentRequests = ((requestsRes.data || []) as any[]).map((req) => {
     const propName = firstRelated(req.properties)?.name;
     const unitName = firstRelated(req.units)?.name;
     return {
@@ -102,6 +164,9 @@ export default async function DashboardPage() {
       status: req.status,
       priority: req.priority || "normal",
       createdAt: req.created_at,
+      unit: unitName || "Room",
+      assignedTo: req.assigned_to,
+      issue: req.issue,
     };
   });
 
@@ -120,6 +185,12 @@ export default async function DashboardPage() {
       whatsappAlertPhone={whatsappAlertPhone}
       hasTwilioContentSid={hasTwilioContentSid}
       userEmail={user?.email || undefined}
+      metrics={{
+        today: todayRes.count || 0,
+        week: weekRes.count || 0,
+        typeCounts,
+        topIssues,
+      }}
     />
   );
 }

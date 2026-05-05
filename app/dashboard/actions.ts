@@ -416,7 +416,7 @@ export async function sendTestWhatsAppAlert(
     unitId: "test-unit-id",
     room: "Test Room 101",
     type: "towels" as const,
-    status: "Open" as const,
+    status: "open" as any,
     createdAt: new Date().toISOString(),
     guestMessage: "This is a test alert from StayAssist AI. If you received this, your configuration is working!",
   };
@@ -436,4 +436,86 @@ export async function sendTestWhatsAppAlert(
   } catch (err) {
     return { error: `Crash: ${err instanceof Error ? err.message : "Unknown error"}` };
   }
+}
+
+export async function assignGuestRequest(id: string) {
+  const context = await getTenantContext();
+  const organizationId = requireTenantOrganization(context) as string;
+
+  const { error } = await context.admin
+    .from("requests")
+    .update({
+      assigned_to: context.user.id,
+      status: "in_progress",
+    })
+    .eq("id", id)
+    .eq("organization_id", organizationId) // CRITICAL: Strict multi-tenant check
+    .not("status", "eq", "resolved"); // Cannot assign if already resolved
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
+}
+
+export async function resolveGuestRequest(id: string) {
+  const context = await getTenantContext();
+  const organizationId = requireTenantOrganization(context) as string;
+
+  // 1. Fetch current request to get data for WhatsApp
+  const { data: request, error: fetchError } = await context.admin
+    .from("requests")
+    .select("id, category, status, organization_id, property_id, unit_id, properties(name), units(name)")
+    .eq("id", id)
+    .eq("organization_id", organizationId)
+    .single();
+
+  if (fetchError || !request) {
+    throw new Error("Request not found or access denied.");
+  }
+
+  // 2. Prevent moving back from resolved (Status Lock)
+  if (request.status === "resolved") {
+    return { success: true, message: "Already resolved." };
+  }
+
+  // 3. Update status in DB (UTC Time)
+  const { error: updateError } = await context.admin
+    .from("requests")
+    .update({
+      status: "resolved",
+      resolved_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("organization_id", organizationId);
+
+  if (updateError) throw new Error(updateError.message);
+
+  // 4. Send WhatsApp Notification (Robust Flow)
+  try {
+    const { getOrganizationWhatsAppAlertPhone } = await import("@/lib/supabase-rest");
+    const { sendRequestWhatsAppAlert } = await import("@/lib/twilio-whatsapp");
+
+    const to = await getOrganizationWhatsAppAlertPhone(organizationId);
+    
+    // Transform to GuestRequest format
+    const guestReq = {
+      id: request.id,
+      propertyId: request.property_id || "",
+      property: (Array.isArray(request.properties) ? request.properties[0]?.name : (request.properties as any)?.name) || "Unknown",
+      unitId: request.unit_id || "",
+      room: (Array.isArray(request.units) ? request.units[0]?.name : (request.units as any)?.name) || "Unknown",
+      type: request.category as any,
+      status: "Resolved" as any,
+      createdAt: new Date().toISOString(),
+      guestMessage: "✅ Request marked as RESOLVED by staff.",
+    };
+
+    await sendRequestWhatsAppAlert(guestReq, { to });
+  } catch (err) {
+    // DO NOT block the UI if WhatsApp fails
+    console.error("[WA FAIL ON RESOLVE]", err);
+  }
+
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
 }
