@@ -195,6 +195,21 @@ export function DashboardShell({
               <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">Concierge Command Center</p>
               <h1 className="mt-2 font-display text-4xl tracking-tight text-navy sm:text-5xl">Dashboard</h1>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => window.location.reload()}
+                className="rounded-full border border-border bg-white/75 px-4 py-2 text-sm font-semibold text-navy transition hover:border-accent"
+              >
+                Refresh
+              </button>
+              <a
+                href="/guest"
+                target="_blank"
+                className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+              >
+                Open guest PWA
+              </a>
+            </div>
           </div>
 
           {properties.length === 0 ? (
