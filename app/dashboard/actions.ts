@@ -567,7 +567,7 @@ export async function resolveGuestRequest(id: string) {
       unitId: request.unit_id || "",
       room: (Array.isArray(request.units) ? request.units[0]?.name : (request.units as any)?.name) || "Unknown",
       type: request.category as any,
-      status: "Resolved" as any,
+      status: "resolved" as any,
       createdAt: new Date().toISOString(),
       guestMessage: "✅ Request marked as RESOLVED by staff.",
     };

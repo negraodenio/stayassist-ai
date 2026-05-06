@@ -8,14 +8,14 @@ import {
   type GuestRequestStatus,
 } from "@/lib/guest-requests";
 
-const statuses: GuestRequestStatus[] = ["Open", "In progress", "Resolved"];
+const statuses: GuestRequestStatus[] = ["open", "in_progress", "resolved"];
 
 function statusClass(status: GuestRequestStatus) {
-  if (status === "Resolved") {
+  if (status === "resolved") {
     return "bg-success/10 text-success";
   }
 
-  if (status === "In progress") {
+  if (status === "in_progress") {
     return "bg-accent/15 text-accent-strong";
   }
 
@@ -75,9 +75,9 @@ export function RequestsBoard() {
 
   const metrics = useMemo(
     () => ({
-      open: requests.filter((request) => request.status === "Open").length,
-      progress: requests.filter((request) => request.status === "In progress").length,
-      resolved: requests.filter((request) => request.status === "Resolved").length,
+      open: requests.filter((request) => request.status === "open").length,
+      progress: requests.filter((request) => request.status === "in_progress").length,
+      resolved: requests.filter((request) => request.status === "resolved").length,
     }),
     [requests],
   );
@@ -182,7 +182,7 @@ export function RequestsBoard() {
                     : "border-border bg-white/75 text-muted hover:border-accent hover:text-navy"
                 }`}
               >
-                {status}
+                {status.replace("_", " ")}
               </button>
             ))}
           </div>
@@ -230,7 +230,7 @@ export function RequestsBoard() {
                         request.status,
                       )}`}
                     >
-                      {request.status}
+                      {request.status.replace("_", " ")}
                     </span>
                   </div>
                   <div>
@@ -244,9 +244,9 @@ export function RequestsBoard() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => updateRequestStatus(request.id, "In progress")}
+                      onClick={() => updateRequestStatus(request.id, "in_progress")}
                       disabled={
-                        request.status === "In progress" || updatingId === request.id
+                        request.status === "in_progress" || updatingId === request.id
                       }
                       className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-navy transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-45"
                     >
@@ -254,8 +254,8 @@ export function RequestsBoard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => updateRequestStatus(request.id, "Resolved")}
-                      disabled={request.status === "Resolved" || updatingId === request.id}
+                      onClick={() => updateRequestStatus(request.id, "resolved")}
+                      disabled={request.status === "resolved" || updatingId === request.id}
                       className="rounded-full bg-success px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#326b53] disabled:cursor-not-allowed disabled:opacity-45"
                     >
                       Mark resolved
