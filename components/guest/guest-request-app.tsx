@@ -401,7 +401,7 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
                     </div>
                     <span
                       className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${
-                        req.status === "Open"
+                        req.status === "open"
                           ? "bg-accent/10 text-accent-strong"
                           : "bg-success/10 text-success"
                       }`}
