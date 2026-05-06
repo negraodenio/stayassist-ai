@@ -242,12 +242,18 @@ export function DashboardShell({
                     <div className="glass-panel rounded-[32px] bg-white/40 p-8 luxury-ring">
                       <h3 className="font-display text-2xl font-bold text-navy mb-6">Service Distribution</h3>
                       <div className="space-y-4">
-                        {Object.entries(metrics.typeCounts).map(([type, count]) => (
-                          <div key={type} className="flex items-center justify-between group">
-                            <span className="text-sm font-medium text-navy capitalize">{type.replace('_', ' ')}</span>
-                            <span className="font-mono text-sm font-bold text-navy">{count}</span>
+                        {Object.entries(metrics.typeCounts).length > 0 ? (
+                          Object.entries(metrics.typeCounts).map(([type, count]) => (
+                            <div key={type} className="flex items-center justify-between group">
+                              <span className="text-sm font-medium text-navy capitalize">{type.replace('_', ' ')}</span>
+                              <span className="font-mono text-sm font-bold text-navy">{count}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-10 text-center">
+                            <p className="text-xs italic text-muted">No service requests yet. This will show the distribution of guest needs.</p>
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
 
@@ -258,12 +264,18 @@ export function DashboardShell({
                         <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Action Required</span>
                       </div>
                       <div className="space-y-4">
-                        {metrics.topIssues.map((issue, idx) => (
-                          <div key={idx} className="flex items-center justify-between group">
-                            <span className="text-sm font-medium text-navy">{issue.topic}</span>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold shadow-sm">{issue.count} cases</span>
+                        {metrics.topIssues.length > 0 ? (
+                          metrics.topIssues.map((issue, idx) => (
+                            <div key={idx} className="flex items-center justify-between group">
+                              <span className="text-sm font-medium text-navy">{issue.topic}</span>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold shadow-sm">{issue.count} cases</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="py-10 text-center">
+                            <p className="text-xs italic text-muted">No maintenance issues reported yet. This section tracks frequent guest complaints.</p>
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   </div>
