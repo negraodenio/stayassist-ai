@@ -149,7 +149,7 @@ DIRETRIZES: 1. Responda sempre no mesmo idioma da pergunta do hóspede. 2. Seja 
               unitId: "chat",
               room: finalUnitName,
               type: "help" as GuestRequestType,
-              status: "Open",
+              status: "open",
               createdAt: new Date().toISOString(),
               guestMessage: userMessageContent,
             }).catch((e) => console.error("WA Error", e));
