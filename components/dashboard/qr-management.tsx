@@ -4,6 +4,26 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import type { GuestUnit } from "@/lib/guest-requests";
 
+function SectionHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-semibold uppercase tracking-[0.32em] text-accent-strong">
+        {eyebrow}
+      </p>
+      <h2 className="font-display text-3xl tracking-tight text-navy">{title}</h2>
+      <p className="max-w-2xl text-sm leading-7 text-muted">{description}</p>
+    </div>
+  );
+}
+
 type LoadState = "idle" | "loading" | "saving" | "error";
 
 function getGuestUrl(token: string) {
@@ -101,291 +121,6 @@ export function QrManagement() {
       setNotice("Error generating some QR codes.");
       setState("error");
     }
-  }
-
-  function toggleSelect(id: string) {
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  function toggleSelectAll() {
-    if (selectedIds.size === filteredUnits.length && filteredUnits.length > 0) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filteredUnits.map((u) => u.id)));
-    }
-  }
-
-  async function generateIndividual(unitId: string) {
-    setState("saving");
-    setNotice(null);
-
-    try {
-      const response = await fetch(`/api/qr/units/${unitId}`, { method: "PATCH" });
-      const payload = (await response.json().catch(() => ({}))) as {
-        unit?: GuestUnit;
-        message?: string;
-      };
-
-      if (!response.ok || !payload.unit) {
-        throw new Error(payload.message || "Unable to generate QR code.");
-      }
-
-      setUnits((current) =>
-        current.map((item) => (item.id === payload.unit?.id ? payload.unit : item)),
-      );
-      setPreviewUnit(payload.unit);
-      setState("idle");
-    } catch (error) {
-      setNotice(
-        error instanceof Error ? error.message : "Unable to generate QR code.",
-      );
-      setState("error");
-    }
-  }
-
-  async function regenerate(unit: GuestUnit) {
-    const confirmed = window.confirm(
-      `Regenerate QR for ${unit.propertyName} - ${unit.name}?\n\nThe currently printed QR code will stop working.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    await generateIndividual(unit.id);
-  }
-
-  async function copyUrl(token: string) {
-    await navigator.clipboard.writeText(getGuestUrl(token));
-    setNotice("Guest QR URL copied.");
-  }
-
-  return (
-    <main className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-7xl">
-        <section className="glass-panel rounded-[30px] p-5 sm:p-7 lg:p-8">
-          <div className="flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-                QR Management
-              </p>
-              <h1 className="mt-3 font-display text-4xl tracking-tight text-navy sm:text-5xl">
-                Room QR codes
-              </h1>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-muted">
-                Generate assigned guest links for every unit so each QR opens the right room experience.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {selectedIds.size > 0 && (
-                <button
-                  type="button"
-                  onClick={generateSelected}
-                  disabled={state === "saving"}
-                  className="rounded-full bg-accent-strong px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent disabled:opacity-45"
-                >
-                  {state === "saving" ? "Generating..." : `Generate Selected (${selectedIds.size})`}
-                </button>
-              )}
-              <a
-                href="/dashboard"
-                className="rounded-full border border-border bg-white/75 px-4 py-2 text-sm font-semibold text-navy transition hover:border-accent"
-              >
-                Dashboard
-              </a>
-            </div>
-          </div>
-
-          {notice ? (
-            <div className="mt-5 rounded-[22px] border border-border bg-white/80 p-4 text-sm text-muted">
-              {notice}
-            </div>
-          ) : null}
-
-          <div className="mt-6">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search properties, floors, or room numbers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-2xl border border-border bg-white/80 py-4 pl-12 pr-4 text-sm outline-none transition focus:border-accent luxury-ring"
-              />
-              <svg className="absolute left-4 top-4 h-5 w-5 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <article className="rounded-[24px] border border-border bg-white/80 p-5">
-              <p className="text-sm text-muted">Units</p>
-              <p className="mt-3 font-display text-5xl text-navy">{units.length}</p>
-            </article>
-            <article className="rounded-[24px] border border-border bg-white/80 p-5">
-              <p className="text-sm text-muted">Active QR</p>
-              <p className="mt-3 font-display text-5xl text-success">
-                {units.length - missingCount}
-              </p>
-            </article>
-            <article className="rounded-[24px] border border-border bg-white/80 p-5">
-              <p className="text-sm text-muted">Missing</p>
-              <p className="mt-3 font-display text-5xl text-accent-strong">
-                {missingCount}
-              </p>
-            </article>
-          </div>
-
-          <div className="mt-6 overflow-hidden rounded-[28px] border border-border bg-white/82">
-            <div className="hidden grid-cols-[40px_1.1fr_0.9fr_0.7fr_1fr_1.2fr] gap-4 border-b border-border px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:grid">
-              <div className="flex items-center justify-center">
-                <input 
-                  type="checkbox" 
-                  checked={selectedIds.size === filteredUnits.length && filteredUnits.length > 0}
-                  onChange={toggleSelectAll}
-                  className="h-4 w-4 rounded border-border text-navy focus:ring-navy"
-                />
-              </div>
-              <span>Property</span>
-              <span>Unit</span>
-              <span>Status</span>
-              <span>QR</span>
-              <span>Actions</span>
-            </div>
-
-            {filteredUnits.length > 0 ? (
-              filteredUnits.map((unit) => {
-                const isActive = Boolean(unit.qrToken);
-                const guestUrl = unit.qrToken ? getGuestUrl(unit.qrToken) : "";
-
-                return (
-                  <article
-                    key={unit.id}
-                    className="grid gap-4 border-b border-border/70 px-5 py-5 last:border-b-0 lg:grid-cols-[40px_1.1fr_0.9fr_0.7fr_1fr_1.2fr] lg:items-center"
-                  >
-                    <div className="flex items-center justify-center">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedIds.has(unit.id)}
-                        onChange={() => toggleSelect(unit.id)}
-                        className="h-4 w-4 rounded border-border text-navy focus:ring-navy"
-                      />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:hidden">
-                        Property
-                      </p>
-                      <p className="font-semibold text-navy">{unit.propertyName}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:hidden">
-                        Unit
-                      </p>
-                      <p className="text-sm text-navy">{unit.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted lg:hidden">
-                        Status
-                      </p>
-                      <span
-                        className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold ${
-                          isActive
-                            ? "bg-success/10 text-success"
-                            : "bg-accent/15 text-accent-strong"
-                        }`}
-                      >
-                        {isActive ? "Active" : "Missing"}
-                      </span>
-                    </div>
-                    <div>
-                      {unit.qrToken ? (
-                        <Image
-                          alt={`QR code for ${unit.name}`}
-                          className="h-20 w-20 rounded-xl border border-border bg-white p-1"
-                          src={getQrImageUrl(guestUrl, 160)}
-                          width={80}
-                          height={80}
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-border bg-white/60 text-xs font-semibold uppercase tracking-[0.2em] text-muted">
-                          None
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPreviewUnit(unit)}
-                        disabled={!unit.qrToken}
-                        className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-navy transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        Preview
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => unit.qrToken && copyUrl(unit.qrToken)}
-                        disabled={!unit.qrToken}
-                        className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-navy transition hover:border-accent disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        Copy URL
-                      </button>
-                      {unit.qrToken ? (
-                        <>
-                          <a
-                            href={`/api/qr/png?value=${encodeURIComponent(guestUrl)}`}
-                            className="rounded-full bg-navy px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
-                          >
-                            Download PNG
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => regenerate(unit)}
-                            className="rounded-full border border-border bg-white px-3 py-2 text-sm font-semibold text-muted transition hover:border-accent hover:text-navy"
-                          >
-                            Regenerate
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => generateIndividual(unit.id)}
-                          disabled={state === "saving"}
-                          className="rounded-full bg-accent-strong px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent disabled:opacity-50"
-                        >
-                          {state === "saving" ? "Generating..." : "Generate QR"}
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })
-            ) : (
-              <div className="px-5 py-10 text-center">
-                <p className="font-semibold text-navy">
-                  {state === "loading" ? "Loading units..." : "No units found."}
-                </p>
-                <p className="mt-2 text-sm text-muted">
-                  Units are loaded from your Supabase units table.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      {previewUnit?.qrToken ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/35 px-4 py-6 backdrop-blur-sm">
-          <section className="glass-panel w-full max-w-md rounded-[28px] p-6 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
-              QR Preview
-            </p>
-            <h2 className="mt-3 font-display text-3xl text-navy">
               {previewUnit.propertyName}
             </h2>
             <p className="mt-1 font-semibold text-muted">{previewUnit.name}</p>

@@ -42,8 +42,14 @@ export async function getPropertiesAction(organizationId?: string) {
 
 export async function createPropertyAction(name: string, organizationId: string) {
   await ensureAdmin();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   const admin = createAdminClient();
-  const { data, error } = await admin.from("properties").insert({ name, organization_id: organizationId }).select().single();
+  const { data, error } = await admin.from("properties").insert({ 
+    name, 
+    organization_id: organizationId,
+    user_id: user?.id 
+  }).select().single();
   if (error) throw error;
   revalidatePath("/admin-master");
   return data;

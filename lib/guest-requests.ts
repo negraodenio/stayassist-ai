@@ -1,7 +1,7 @@
 export type GuestRequestType = "towels" | "cleaning" | "issue" | "help" | "emergency";
 
 
-export type GuestRequestStatus = "Open" | "In progress" | "Resolved";
+export type GuestRequestStatus = "open" | "in_progress" | "resolved";
 
 export type GuestUnit = {
   id: string;
@@ -103,7 +103,7 @@ export const fallbackGuestRequests: GuestRequest[] = [
     unitId: "unit-suite-804",
     room: "Suite 804",
     type: "towels",
-    status: "Open",
+    status: "open",
     createdAt: "2026-04-28T08:35:00.000Z",
   },
   {
@@ -113,7 +113,7 @@ export const fallbackGuestRequests: GuestRequest[] = [
     unitId: "unit-loft-12",
     room: "Loft 12",
     type: "cleaning",
-    status: "In progress",
+    status: "in_progress",
     createdAt: "2026-04-28T09:10:00.000Z",
   },
   {
@@ -123,7 +123,7 @@ export const fallbackGuestRequests: GuestRequest[] = [
     unitId: "unit-villa-7",
     room: "Villa 7",
     type: "help",
-    status: "Resolved",
+    status: "resolved",
     createdAt: "2026-04-28T09:45:00.000Z",
   },
 ];

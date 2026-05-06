@@ -89,6 +89,68 @@ export async function setupHotelAndUnits(prevState: unknown, formData: FormData)
   return { success: true };
 }
 
+export async function createOrganization(prevState: unknown, formData: FormData) {
+  const name = formData.get("name") as string;
+  if (!name) return { error: "Organization name is required." };
+
+  const context = await getTenantContext();
+  if (!context.isSuperAdmin) return { error: "Only superadmins can create organizations." };
+
+  const slug = name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
+
+  const { data, error } = await context.admin
+    .from("organizations")
+    .insert({ name, slug })
+    .select()
+    .single();
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard", "layout");
+  return { success: true, data };
+}
+
+export async function createProperty(prevState: unknown, formData: FormData) {
+  const name = formData.get("name") as string;
+  const organizationId = formData.get("organizationId") as string;
+  const unitsCount = parseInt(formData.get("unitsCount") as string || "0", 10);
+
+  if (!name || !organizationId) return { error: "Name and Organization are required." };
+
+  const context = await getTenantContext();
+  
+  // Security check: superadmin can create anywhere, others only in their org
+  if (!context.isSuperAdmin && organizationId !== context.organizationId) {
+    return { error: "Unauthorized." };
+  }
+
+  const slug = name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
+
+  const { data: property, error: propError } = await context.admin
+    .from("properties")
+    .insert({
+      name,
+      slug,
+      organization_id: organizationId,
+      user_id: context.user.id, // CRITICAL FIX: Always set user_id for RLS
+    })
+    .select()
+    .single();
+
+  if (propError) return { error: propError.message };
+
+  // Optional: Create initial units
+  if (unitsCount > 0) {
+    const unitsToInsert = Array.from({ length: Math.min(unitsCount, 100) }).map((_, i) => ({
+      property_id: property.id,
+      name: `Room ${100 + i + 1}`,
+    }));
+    await context.admin.from("units").insert(unitsToInsert);
+  }
+
+  revalidatePath("/dashboard", "layout");
+  return { success: true };
+}
+
 
 
 // ─── Configuração RAG ──────────────────────────────────────────────────────────

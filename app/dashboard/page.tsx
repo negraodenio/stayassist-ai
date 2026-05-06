@@ -112,6 +112,21 @@ export default async function DashboardPage() {
     knowledgeQuery = knowledgeQuery.eq("properties.organization_id", orgId);
   }
 
+  // Admin data
+  let allOrganizations = [];
+  let allProfiles = [];
+  if (isSuperAdmin) {
+    const [orgsRes, profilesRes] = await Promise.all([
+      admin.from("organizations").select("*").order("name", { ascending: true }),
+      admin.from("profiles").select("*, organizations(name)").order("email", { ascending: true })
+    ]);
+    allOrganizations = orgsRes.data || [];
+    allProfiles = (profilesRes.data || []).map(p => ({
+      ...p,
+      organizationName: Array.isArray(p.organizations) ? p.organizations[0]?.name : (p.organizations as any)?.name || "System"
+    }));
+  }
+
   // Parallel Execution
   const [
     todayRes,
@@ -191,6 +206,8 @@ export default async function DashboardPage() {
         typeCounts,
         topIssues,
       }}
+      allOrganizations={allOrganizations}
+      allProfiles={allProfiles}
     />
   );
 }

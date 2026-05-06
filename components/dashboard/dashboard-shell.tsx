@@ -8,11 +8,15 @@ import {
   updateWhatsAppAlertPhone,
   uploadKnowledgeFile,
   sendTestWhatsAppAlert,
+  createProperty,
+  createOrganization,
 } from "@/app/dashboard/actions";
 import { KanbanBoard } from "./kanban-board";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
 import { KnowledgeTestChat } from "./knowledge-test-chat";
+import { QrManagement } from "./qr-management";
+import { AdminForms } from "../admin/admin-forms";
 
 const navigationItems = [
   { id: "overview", label: "Overview", short: "OV" },
@@ -81,6 +85,8 @@ export function DashboardShell({
   hasTwilioContentSid,
   userEmail,
   metrics,
+  allOrganizations,
+  allProfiles,
 }: {
   properties: DashboardProperty[];
   unitsCount: number;
@@ -95,6 +101,8 @@ export function DashboardShell({
     typeCounts: Record<string, number>;
     topIssues: { topic: string; count: number }[];
   };
+  allOrganizations?: any[];
+  allProfiles?: any[];
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id || "");
@@ -109,6 +117,9 @@ export function DashboardShell({
 
   const [isTestPending, setIsTestPending] = useState(false);
   const [testResult, setTestResult] = useState<{ error?: string; success?: boolean; message?: string } | null>(null);
+
+  const [createPropState, createPropAction, isCreatePropPending] = useActionState(createProperty, null);
+  const [createOrgState, createOrgAction, isCreateOrgPending] = useActionState(createOrganization, null);
 
   const organizationId = properties[0]?.organization_id || "";
 
@@ -146,16 +157,20 @@ export function DashboardShell({
             ))}
             
             {userEmail === "negraodenio@gmail.com" && (
-              <Link
-                href="/admin-master"
-                className="flex items-center gap-4 rounded-2xl px-4 py-3 bg-amber-500/10 text-amber-600 transition hover:bg-amber-500/20 luxury-ring"
+              <button
+                onClick={() => setActiveTab("admin")}
+                className={`w-full flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-amber-500/10 ${
+                  activeTab === "admin" ? "bg-amber-500/10 text-amber-600 luxury-ring" : "text-muted"
+                }`}
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500 text-xs font-semibold tracking-[0.2em] text-white">MA</span>
-                <div>
+                <span className={`flex h-11 w-11 items-center justify-center rounded-2xl text-xs font-semibold tracking-[0.2em] ${
+                  activeTab === "admin" ? "bg-amber-500 text-white" : "bg-amber-500/20 text-amber-600"
+                }`}>MA</span>
+                <div className="text-left">
                   <p className="font-semibold italic">Master Admin</p>
                   <p className="text-xs uppercase tracking-[0.24em] opacity-70 italic">Control Panel</p>
                 </div>
-              </Link>
+              </button>
             )}
           </nav>
 
@@ -312,25 +327,50 @@ export function DashboardShell({
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                   <SectionHeading eyebrow="Properties" title="Portfolio visibility" description="Manage your property locations and settings." />
                   <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                      {properties.map((property) => (
-                        <article
-                          key={property.id}
-                          className={`rounded-[24px] border p-6 transition cursor-pointer ${
-                            selectedPropertyId === property.id ? "border-accent bg-white shadow-md luxury-ring" : "border-border bg-white/60 hover:bg-white"
-                          }`}
-                          onClick={() => setSelectedPropertyId(property.id)}
-                        >
-                          <h3 className="font-display text-2xl text-navy">{property.name}</h3>
-                          <p className="mt-2 text-[10px] text-muted">ID: {property.id}</p>
-                          <div className="mt-6 flex items-center justify-between text-xs text-muted">
-                            <span className="flex items-center gap-2">
-                              <span className={`h-2 w-2 rounded-full ${property.latitude ? "bg-emerald-500" : "bg-stone-300"}`}></span>
-                              {property.latitude ? "Location Set" : "Pending"}
-                            </span>
+                    <div className="space-y-6">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        {properties.map((property) => (
+                          <article
+                            key={property.id}
+                            className={`rounded-[24px] border p-6 transition cursor-pointer ${
+                              selectedPropertyId === property.id ? "border-accent bg-white shadow-md luxury-ring" : "border-border bg-white/60 hover:bg-white"
+                            }`}
+                            onClick={() => setSelectedPropertyId(property.id)}
+                          >
+                            <h3 className="font-display text-2xl text-navy">{property.name}</h3>
+                            <p className="mt-2 text-[10px] text-muted">ID: {property.id}</p>
+                            <div className="mt-6 flex items-center justify-between text-xs text-muted">
+                              <span className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${property.latitude ? "bg-emerald-500" : "bg-stone-300"}`}></span>
+                                {property.latitude ? "Location Set" : "Pending"}
+                              </span>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+
+                      {/* Register New Property Form */}
+                      <div className="rounded-[28px] border border-border bg-stone-50/50 p-8">
+                        <h3 className="text-xl font-display text-navy mb-6">Register New Property</h3>
+                        <form action={createPropAction} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <input type="hidden" name="organizationId" value={organizationId} />
+                          <div>
+                            <label className="mb-2 block text-xs font-bold uppercase text-navy">Property Name</label>
+                            <input name="name" type="text" required placeholder="e.g. Malia Beach Resort" className="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm outline-none" />
                           </div>
-                        </article>
-                      ))}
+                          <div>
+                            <label className="mb-2 block text-xs font-bold uppercase text-navy">Initial Units</label>
+                            <input name="unitsCount" type="number" defaultValue="10" className="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm outline-none" />
+                          </div>
+                          <div className="md:col-span-2">
+                            {createPropState?.error && <p className="text-xs text-red-500 mb-2">{createPropState.error}</p>}
+                            {createPropState?.success && <p className="text-xs text-green-500 mb-2">Property created!</p>}
+                            <button type="submit" disabled={isCreatePropPending} className="w-full rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]">
+                              {isCreatePropPending ? "Registering..." : "Add to Portfolio"}
+                            </button>
+                          </div>
+                        </form>
+                      </div>
                     </div>
 
                     <div className="rounded-[28px] border border-border bg-white p-8 shadow-sm h-fit">
@@ -408,6 +448,29 @@ export function DashboardShell({
                 </div>
               )}
 
+               {/* --- QR TAB --- */}
+              {activeTab === "qr" && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <QrManagement />
+                </div>
+              )}
+
+              {/* --- MASTER ADMIN TAB --- */}
+              {activeTab === "admin" && (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  <SectionHeading 
+                    eyebrow="System Control" 
+                    title="Master Admin" 
+                    description="Centralized multi-tenant management for organizations and administrative users." 
+                  />
+                  <div className="mt-8">
+                    <AdminForms 
+                      organizations={allOrganizations || []} 
+                      profiles={allProfiles || []} 
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

@@ -269,7 +269,7 @@ export async function createGuestRequest(input: {
       property_id: input.propertyId,
       unit_id: input.unitId,
       category: input.type,
-      status: "Open",
+      status: "open",
       priority: priority,
       guest_name: "Guest",
       guest_message: requestMessageByType[input.type],
