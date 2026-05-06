@@ -383,8 +383,8 @@ export function QrManagement() {
         )}
       </div>
 
-      {previewUnit?.qrToken ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/35 px-4 py-6 backdrop-blur-sm">
+      {previewUnit ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-navy/60 px-4 py-6 backdrop-blur-md">
           <section className="glass-panel w-full max-w-md rounded-[28px] p-6 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-accent-strong">
               QR Preview
@@ -393,33 +393,45 @@ export function QrManagement() {
               {previewUnit.propertyName}
             </h2>
             <p className="mt-1 font-semibold text-muted">{previewUnit.name}</p>
-            <Image
-              alt={`QR code for ${previewUnit.name}`}
-              className="mx-auto mt-6 h-72 w-72 rounded-[24px] border border-border bg-white p-4"
-              src={getQrImageUrl(getGuestUrl(previewUnit.qrToken), 520)}
-              width={288}
-              height={288}
-              unoptimized
-            />
-            <p className="mt-5 break-all rounded-2xl bg-white/75 px-4 py-3 text-sm text-muted">
-              {getGuestUrl(previewUnit.qrToken)}
-            </p>
+            {previewUnit.qrToken ? (
+              <>
+                <Image
+                  alt={`QR code for ${previewUnit.name}`}
+                  className="mx-auto mt-6 h-72 w-72 rounded-[24px] border border-border bg-white p-4"
+                  src={getQrImageUrl(getGuestUrl(previewUnit.qrToken), 520)}
+                  width={288}
+                  height={288}
+                  unoptimized
+                />
+                <p className="mt-5 break-all rounded-2xl bg-white/75 px-4 py-3 text-sm text-muted">
+                  {getGuestUrl(previewUnit.qrToken)}
+                </p>
+              </>
+            ) : (
+              <div className="mt-8 flex h-72 w-full items-center justify-center rounded-[24px] border border-dashed border-border bg-white/60">
+                <p className="text-sm font-semibold uppercase tracking-widest text-muted">No QR Token</p>
+              </div>
+            )}
             <div className="mt-5 flex flex-wrap justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => copyUrl(previewUnit.qrToken || "")}
-                className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-navy transition hover:border-accent"
-              >
-                Copy URL
-              </button>
-              <a
-                href={`/api/qr/png?value=${encodeURIComponent(
-                  getGuestUrl(previewUnit.qrToken),
-                )}`}
-                className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
-              >
-                Download PNG
-              </a>
+              {previewUnit.qrToken && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => copyUrl(previewUnit.qrToken || "")}
+                    className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-navy transition hover:border-accent"
+                  >
+                    Copy URL
+                  </button>
+                  <a
+                    href={`/api/qr/png?value=${encodeURIComponent(
+                      getGuestUrl(previewUnit.qrToken),
+                    )}`}
+                    className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1c4755]"
+                  >
+                    Download PNG
+                  </a>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setPreviewUnit(null)}
