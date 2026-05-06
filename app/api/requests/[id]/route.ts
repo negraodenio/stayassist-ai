@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { updateGuestRequestStatus } from "@/lib/supabase-rest";
 import type { GuestRequestStatus } from "@/lib/guest-requests";
 
-const allowedStatuses: GuestRequestStatus[] = ["Open", "In progress", "Resolved"];
+const allowedStatuses: GuestRequestStatus[] = ["open", "in_progress", "resolved"];
 
 export async function PATCH(
   request: Request,
