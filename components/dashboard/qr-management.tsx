@@ -336,7 +336,15 @@ export function QrManagement() {
 
                   {previewUnit?.id === unit.id && (
                     <div className="absolute bottom-full right-0 z-[100] mb-4 w-72 animate-in fade-in zoom-in slide-in-from-bottom-2 duration-300">
-                      <div className="glass-panel overflow-hidden rounded-[24px] border border-accent bg-white p-4 shadow-2xl luxury-ring">
+                      <div className="glass-panel overflow-hidden rounded-[24px] border border-accent bg-white p-4 shadow-2xl luxury-ring relative">
+                        <button 
+                          onClick={() => setPreviewUnit(null)}
+                          className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-muted transition hover:bg-stone-200 hover:text-navy"
+                        >
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
                         <div className="text-center">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-accent-strong">QR Preview</p>
                           <h4 className="mt-1 font-display text-lg text-navy">{unit.name}</h4>
