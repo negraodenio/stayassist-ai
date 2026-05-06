@@ -413,9 +413,20 @@ export function DashboardShell({
                           <label className="mb-2 block text-xs font-bold uppercase text-navy">Full Address</label>
                           <input name="address" type="text" defaultValue={selectedProperty?.address || ""} className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
                         </div>
+                         <div>
+                          <label className="mb-2 block text-xs font-bold uppercase text-navy">Zip Code (CEP)</label>
+                          <input name="zip_code" type="text" defaultValue={selectedProperty?.zip_code || ""} placeholder="e.g. 1000-001" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          <p className="mt-1 text-[10px] text-muted italic">Used for automatic geocoding if Lat/Lng are empty.</p>
+                        </div>
                         <div className="grid grid-cols-2 gap-4">
-                          <input name="latitude" type="number" step="any" defaultValue={selectedProperty?.latitude || ""} placeholder="Lat" className="rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
-                          <input name="longitude" type="number" step="any" defaultValue={selectedProperty?.longitude || ""} placeholder="Lng" className="rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          <div>
+                            <label className="mb-2 block text-xs font-bold uppercase text-navy">Latitude</label>
+                            <input name="latitude" type="number" step="any" defaultValue={selectedProperty?.latitude || ""} placeholder="Lat" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-xs font-bold uppercase text-navy">Longitude</label>
+                            <input name="longitude" type="number" step="any" defaultValue={selectedProperty?.longitude || ""} placeholder="Lng" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
+                          </div>
                         </div>
                         <button type="submit" className="rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]">Save Location</button>
                       </form>
