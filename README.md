@@ -1,5 +1,13 @@
 # StayAssist AI
 
+[![StayAssist AI](https://img.shields.io/badge/Status-Production--Ready-emerald?style=for-the-badge)](https://maliaconcierge.com)
+
+### 📄 Documentation
+- [**English Documentation (EN)**](DOCS/EN/README.md)
+- [**Documentation en Français (FR)**](DOCS/FR/README.md)
+
+---
+
 **AI-Powered Guest Experience & Operations Platform for Hospitality**
 
 StayAssist AI is a modern SaaS platform built for:

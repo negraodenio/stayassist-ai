@@ -96,7 +96,8 @@ export async function listGuestOptions(): Promise<{
 
   const [orgsResult, unitsResult] = await Promise.all([
     supabase.from("organizations").select("id, name").order("name", { ascending: true }),
-    supabase.from("units").select("id, name, qr_token, property_id, properties(id, name, organization_id)").order("name", { ascending: true }),
+    // SECURITY: qr_token removed from public select to prevent impersonation
+    supabase.from("units").select("id, name, property_id, properties(id, name, organization_id)").order("name", { ascending: true }),
   ]);
 
   if (orgsResult.error) throw new Error(orgsResult.error.message);
