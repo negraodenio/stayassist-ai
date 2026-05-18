@@ -85,7 +85,7 @@ export default async function DashboardPage() {
   // --- Main Dashboard Data ---
   let propertiesQuery = admin
     .from("properties")
-    .select("id, name, organization_id, address, latitude, longitude")
+    .select("id, name, organization_id, address, latitude, longitude, zip_code")
     .order("name", { ascending: true });
 
   let unitsQuery = admin
@@ -102,7 +102,7 @@ export default async function DashboardPage() {
 
   let knowledgeQuery = admin
     .from("property_knowledge")
-    .select("id, property_id, topic, content, created_at, properties!inner(organization_id)")
+    .select("id, property_id, topic, content, source_file, doc_type, language, room_scope, is_staff_only, created_at, properties!inner(organization_id)")
     .order("created_at", { ascending: false });
 
   if (!isSuperAdmin && orgId) {

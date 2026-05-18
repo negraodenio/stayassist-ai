@@ -10,6 +10,8 @@ import {
   sendTestWhatsAppAlert,
   createProperty,
   createOrganization,
+  DOC_TYPES,
+  type DocType,
 } from "@/app/dashboard/actions";
 import { KanbanBoard } from "./kanban-board";
 import { signOut } from "@/app/login/actions";
@@ -25,6 +27,56 @@ const navigationItems = [
   { id: "properties", label: "Properties", short: "PR" },
   { id: "knowledge", label: "Knowledge Base", short: "KB" },
 ];
+
+const DOC_TYPE_LABELS: Record<DocType | string, string> = {
+  manual: "Manual",
+  sop: "SOP",
+  faq: "FAQ",
+  tourism: "Tourism",
+  emergency: "Emergency",
+  concierge: "Concierge",
+  policy: "Policy",
+  appliance: "Appliance",
+  multilingual: "Multilingual",
+  other: "Other",
+};
+
+const DOC_TYPE_COLORS: Record<DocType | string, string> = {
+  manual: "bg-blue-50 text-blue-700 border-blue-200",
+  sop: "bg-purple-50 text-purple-700 border-purple-200",
+  faq: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  tourism: "bg-sky-50 text-sky-700 border-sky-200",
+  emergency: "bg-red-50 text-red-700 border-red-200",
+  concierge: "bg-amber-50 text-amber-700 border-amber-200",
+  policy: "bg-slate-50 text-slate-700 border-slate-200",
+  appliance: "bg-orange-50 text-orange-700 border-orange-200",
+  multilingual: "bg-teal-50 text-teal-700 border-teal-200",
+  other: "bg-stone-50 text-stone-600 border-stone-200",
+};
+
+const LANGUAGE_OPTIONS = [
+  { value: "en", label: "🇬🇧 English" },
+  { value: "pt", label: "🇵🇹 Portuguese" },
+  { value: "es", label: "🇪🇸 Spanish" },
+  { value: "fr", label: "🇫🇷 French" },
+  { value: "de", label: "🇩🇪 German" },
+  { value: "it", label: "🇮🇹 Italian" },
+  { value: "nl", label: "🇳🇱 Dutch" },
+  { value: "ar", label: "🇸🇦 Arabic" },
+  { value: "zh", label: "🇨🇳 Chinese" },
+  { value: "ru", label: "🇷🇺 Russian" },
+];
+
+function DocTypeBadge({ type }: { type: string }) {
+  const color = DOC_TYPE_COLORS[type] || DOC_TYPE_COLORS["other"];
+  const label = DOC_TYPE_LABELS[type] || type;
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${color}`}>
+      {label}
+    </span>
+  );
+}
+
 
 function SectionHeading({
   eyebrow,
@@ -72,7 +124,11 @@ interface DashboardKnowledge {
   property_id: string;
   topic: string;
   content: string;
-  source_file?: string;
+  source_file?: string | null;
+  doc_type?: string | null;
+  language?: string | null;
+  room_scope?: string | null;
+  is_staff_only?: boolean | null;
   created_at: string;
 }
 
@@ -438,48 +494,218 @@ export function DashboardShell({
               {/* --- KNOWLEDGE TAB --- */}
               {activeTab === "knowledge" && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                  {/* Header */}
                   <div className="flex items-end justify-between border-b border-border pb-6">
-                    <SectionHeading eyebrow="AI Concierge" title="Knowledge Base" description="Train your AI assistant with hotel information." />
+                    <SectionHeading eyebrow="AI Concierge" title="Knowledge Base" description="Manage documents that train your AI concierge. All knowledge is scoped per property and never shared across tenants." />
                     <select value={selectedPropertyId} onChange={(e) => setSelectedPropertyId(e.target.value)} className="rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-navy outline-none">
                       {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
 
+                  {/* Knowledge Health Stats */}
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div className="rounded-2xl border border-border bg-white/60 p-4 text-center">
+                      <p className="font-display text-3xl font-bold text-navy">{filteredKnowledge.length}</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted">Chunks</p>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white/60 p-4 text-center">
+                      <p className="font-display text-3xl font-bold text-navy">
+                        {new Set(filteredKnowledge.map(k => k.source_file).filter(Boolean)).size}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted">Documents</p>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white/60 p-4 text-center">
+                      <p className="font-display text-3xl font-bold text-navy">
+                        {new Set(filteredKnowledge.map(k => (k as any).doc_type).filter(Boolean)).size || 1}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted">Categories</p>
+                    </div>
+                    <div className="rounded-2xl border border-border bg-white/60 p-4 text-center">
+                      <p className={`font-display text-3xl font-bold ${filteredKnowledge.length > 0 ? "text-emerald-600" : "text-stone-400"}`}>
+                        {filteredKnowledge.length > 0 ? "✓" : "—"}
+                      </p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-muted">AI Ready</p>
+                    </div>
+                  </div>
+
                   <div className="grid gap-8 xl:grid-cols-2">
+                    {/* Left — Add / Upload forms */}
                     <div className="space-y-6">
+
+                      {/* Add Snippet */}
                       <div className="rounded-[24px] border border-border bg-white p-6 shadow-sm">
-                        <h3 className="text-lg font-bold text-navy mb-4">Add Snippet</h3>
+                        <h3 className="text-lg font-bold text-navy mb-1">Add Knowledge Snippet</h3>
+                        <p className="text-xs text-muted mb-4">Manually add a specific piece of information for your AI concierge.</p>
                         <form action={addKnowledgeAction} className="space-y-4">
                           <input type="hidden" name="propertyId" value={selectedPropertyId} />
-                          <input name="topic" type="text" required placeholder="Topic" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none" />
-                          <textarea name="content" required rows={4} placeholder="Content..." className="w-full rounded-xl border border-border bg-stone-50 px-4 py-3 text-sm outline-none resize-none" />
-                          <button type="submit" disabled={isAddKnowledgePending} className="w-full rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755]">Save</button>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Category</label>
+                              <select name="doc_type" className="w-full rounded-xl border border-border bg-stone-50 px-3 py-2 text-sm outline-none">
+                                {DOC_TYPES.map(t => (
+                                  <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Language</label>
+                              <select name="language" className="w-full rounded-xl border border-border bg-stone-50 px-3 py-2 text-sm outline-none">
+                                {LANGUAGE_OPTIONS.map(l => (
+                                  <option key={l.value} value={l.value}>{l.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Room Scope <span className="font-normal text-muted">(or leave empty for all rooms)</span></label>
+                            <input name="room_scope" type="text" placeholder="e.g. Room 804, Suite A, all" defaultValue="all" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-2 text-sm outline-none" />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Topic</label>
+                            <input name="topic" type="text" required placeholder="e.g. Wi-Fi Instructions, Check-in Process" className="w-full rounded-xl border border-border bg-stone-50 px-4 py-2 text-sm outline-none" />
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Content</label>
+                            <textarea name="content" required rows={4} placeholder="Enter the knowledge content here..." className="w-full rounded-xl border border-border bg-stone-50 px-4 py-2 text-sm outline-none resize-none" />
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <input type="checkbox" name="is_staff_only" value="true" id="snippet-staff-only" className="h-4 w-4 rounded border-border accent-navy" />
+                            <label htmlFor="snippet-staff-only" className="text-xs text-navy cursor-pointer">
+                              <span className="font-bold">Staff only</span> — hidden from guests
+                            </label>
+                          </div>
+
+                          <button type="submit" disabled={isAddKnowledgePending} className="w-full rounded-xl bg-navy px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1c4755] disabled:opacity-50">
+                            {isAddKnowledgePending ? "Saving..." : "Save Snippet"}
+                          </button>
                         </form>
                       </div>
 
-                      <div className="rounded-[24px] border border-border bg-stone-50/50 p-6">
-                        <h3 className="text-lg font-bold text-navy mb-2">Upload Document</h3>
+                      {/* Upload Document */}
+                      <div className="rounded-[24px] border border-dashed border-border bg-stone-50/50 p-6">
+                        <h3 className="text-lg font-bold text-navy mb-1">Upload Document</h3>
+                        <p className="text-xs text-muted mb-4">Upload a PDF or TXT file. It will be automatically chunked and indexed for semantic search.</p>
+                        {uploadState?.success && (
+                          <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-700 font-medium">
+                            ✓ {uploadState.message}
+                          </div>
+                        )}
+                        {uploadState?.error && (
+                          <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-3 text-xs text-red-700">
+                            {uploadState.error}
+                          </div>
+                        )}
                         <form action={uploadAction} className="space-y-4">
                           <input type="hidden" name="propertyId" value={selectedPropertyId} />
-                          <input name="file" type="file" required accept=".pdf,.txt" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-navy file:text-white" />
-                          <button type="submit" disabled={isUploadPending} className="w-full rounded-xl border border-navy px-4 py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white">Upload</button>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">File <span className="font-normal text-muted">(PDF or TXT, max 10MB)</span></label>
+                            <input name="file" type="file" required accept=".pdf,.txt" className="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:bg-navy file:text-white file:text-xs file:font-semibold" />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Category</label>
+                              <select name="doc_type" className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none">
+                                {DOC_TYPES.map(t => (
+                                  <option key={t} value={t}>{DOC_TYPE_LABELS[t]}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Language</label>
+                              <select name="language" className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none">
+                                {LANGUAGE_OPTIONS.map(l => (
+                                  <option key={l.value} value={l.value}>{l.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-navy">Room Scope <span className="font-normal text-muted">(or leave as "all")</span></label>
+                            <input name="room_scope" type="text" placeholder="all" defaultValue="all" className="w-full rounded-xl border border-border bg-white px-4 py-2 text-sm outline-none" />
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <input type="checkbox" name="is_staff_only" value="true" id="upload-staff-only" className="h-4 w-4 rounded border-border accent-navy" />
+                            <label htmlFor="upload-staff-only" className="text-xs text-navy cursor-pointer">
+                              <span className="font-bold">Staff only</span> — hidden from guests
+                            </label>
+                          </div>
+
+                          <button type="submit" disabled={isUploadPending} className="w-full rounded-xl border border-navy px-4 py-3 text-sm font-semibold text-navy transition hover:bg-navy hover:text-white disabled:opacity-50">
+                            {isUploadPending ? "Processing..." : "Upload & Index Document"}
+                          </button>
                         </form>
                       </div>
                     </div>
 
+                    {/* Right — Test chat + Knowledge library */}
                     <div className="space-y-6">
                       <KnowledgeTestChat propertyId={selectedPropertyId} />
-                      <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                        <h4 className="text-xs font-bold uppercase tracking-widest text-muted">Database ({filteredKnowledge.length})</h4>
-                        {filteredKnowledge.map(item => (
-                          <div key={item.id} className="rounded-2xl border border-border bg-white/60 p-4 text-xs group hover:bg-white transition-all">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="font-bold text-navy">{item.topic}</span>
-                              <button onClick={async () => { if(confirm("Delete?")) { const m = await import("@/app/dashboard/actions"); await m.deleteKnowledgeSnippet(item.id); window.location.reload(); } }} className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">Delete</button>
+
+                      {/* Document Library */}
+                      <div className="rounded-[24px] border border-border bg-white/60 p-5">
+                        <div className="mb-4 flex items-center justify-between">
+                          <h4 className="text-xs font-bold uppercase tracking-widest text-muted">
+                            Knowledge Library <span className="ml-1 text-navy">({filteredKnowledge.length})</span>
+                          </h4>
+                        </div>
+                        <div className="space-y-2 max-h-[560px] overflow-y-auto pr-1 custom-scrollbar">
+                          {filteredKnowledge.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+                              <p className="text-xs text-muted italic">No knowledge entries yet. Add a snippet or upload a document to get started.</p>
                             </div>
-                            <p className="text-muted line-clamp-3">{item.content}</p>
-                          </div>
-                        ))}
+                          ) : (
+                            filteredKnowledge.map(item => (
+                              <div key={item.id} className="group rounded-2xl border border-border bg-white/80 p-4 text-xs transition-all hover:shadow-sm hover:bg-white">
+                                <div className="flex items-start justify-between gap-2 mb-2">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <DocTypeBadge type={(item as any).doc_type || "other"} />
+                                    {(item as any).is_staff_only && (
+                                      <span className="inline-flex items-center rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
+                                        Staff Only
+                                      </span>
+                                    )}
+                                    {(item as any).language && (item as any).language !== "en" && (
+                                      <span className="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                                        {(item as any).language}
+                                      </span>
+                                    )}
+                                    {(item as any).room_scope && (item as any).room_scope !== "all" && (
+                                      <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-amber-600">
+                                        🏠 {(item as any).room_scope}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (confirm("Delete this knowledge entry?")) {
+                                        const m = await import("@/app/dashboard/actions");
+                                        await m.deleteKnowledgeSnippet(item.id);
+                                        window.location.reload();
+                                      }
+                                    }}
+                                    className="shrink-0 text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold uppercase tracking-wide"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                                <p className="font-bold text-navy mb-1">{item.topic}</p>
+                                <p className="text-muted line-clamp-2 leading-relaxed">{item.content}</p>
+                                {item.source_file && item.source_file !== "manual_entry" && (
+                                  <p className="mt-2 text-[10px] text-muted/60 font-mono truncate">📄 {item.source_file}</p>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1,5 +1,4 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { generateQueryEmbedding } from "./embeddings";
 
 interface MemoryParams {
   propertyId: string;
@@ -9,7 +8,8 @@ interface MemoryParams {
   content: string;
 }
 
-// Usa o cliente admin (service_role) para bypassar o RLS no contexto de API server-side
+// Admin client (service_role) — bypasses RLS for server-side memory operations.
+// The new tenant-scoped RLS policy protects against direct client access.
 function getAdminClient() {
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,49 +17,73 @@ function getAdminClient() {
   );
 }
 
-export async function saveMemory({ propertyId, sessionId, userType, role, content }: MemoryParams) {
+/**
+ * Saves a conversation turn to persistent memory.
+ *
+ * COST OPTIMIZATION: Embeddings are NOT generated here.
+ * The conversation context is already maintained by the client through
+ * the messages array. Memory is stored as plain text for logging,
+ * audit trails, and future analytics — not for real-time vector retrieval.
+ *
+ * If semantic memory retrieval is needed in the future, run a background
+ * job to batch-embed stored messages.
+ */
+export async function saveMemory({
+  propertyId,
+  sessionId,
+  userType,
+  role,
+  content,
+}: MemoryParams) {
   try {
     const supabase = getAdminClient();
-    
-    // 1. Gera Embedding do conteúdo
-    const embedding = await generateQueryEmbedding(content);
 
-    // 2. Salva no banco
     await supabase.from("conversation_memory").insert({
       property_id: propertyId,
       session_id: sessionId,
       user_type: userType,
       role,
       content,
-      embedding,
+      // embedding intentionally omitted — see cost optimization note above
     });
 
-    // 3. TTL Cleanup Silencioso (Enterprise-Grade)
-    // Deleta memórias dessa sessão mais antigas que 7 dias para economizar custo e manter relevância
+    // TTL Cleanup: Delete memory older than 7 days for this session
     await supabase.rpc("cleanup_old_memory", {
       p_session_id: sessionId,
-      p_days: 7
+      p_days: 7,
     });
-    
   } catch (err) {
-    console.error("Failed to save memory:", err);
+    // Non-blocking — memory failure must never affect the chat response
+    console.error("[Memory] Failed to save:", err);
   }
 }
 
-export async function getMemory(embedding: number[], propertyId: string, sessionId: string) {
+/**
+ * NOTE: getMemory() via vector search is currently unused in the chat pipeline.
+ * The client maintains conversation context through the messages array.
+ * This function is kept for future implementation of persistent cross-session
+ * memory retrieval.
+ */
+export async function getMemory(
+  _embedding: number[],
+  propertyId: string,
+  sessionId: string
+): Promise<{ id: string; content: string }[]> {
   try {
     const supabase = getAdminClient();
-    
-    const { data } = await supabase.rpc("match_memory", {
-      query_embedding: embedding,
-      match_count: 3,
-      p_id: propertyId,
-      s_id: sessionId,
-    });
+
+    // Fallback to recency-based retrieval (no vector search since we don't store embeddings)
+    const { data } = await supabase
+      .from("conversation_memory")
+      .select("id, content")
+      .eq("property_id", propertyId)
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: false })
+      .limit(5);
 
     return data || [];
   } catch (err) {
-    console.error("Failed to get memory:", err);
+    console.error("[Memory] Failed to retrieve:", err);
     return [];
   }
 }

@@ -153,11 +153,27 @@ export async function createProperty(prevState: unknown, formData: FormData) {
 
 
 
-// ─── Configuração RAG ──────────────────────────────────────────────────────────
-const CHUNK_SIZE = 500;       // tokens/palavras aproximadas por chunk
-const CHUNK_OVERLAP = 100;    // overlap para manter contexto
+// ─── RAG Configuration ───────────────────────────────────────────────────────
+const CHUNK_SIZE = 500;       // approximate words per chunk
+const CHUNK_OVERLAP = 100;    // overlap to maintain semantic coherence
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_EXTENSIONS = [".pdf", ".txt"];
+
+// Valid doc_type values for the Knowledge Base
+export const DOC_TYPES = [
+  "manual",
+  "sop",
+  "faq",
+  "tourism",
+  "emergency",
+  "concierge",
+  "policy",
+  "appliance",
+  "multilingual",
+  "other",
+] as const;
+
+export type DocType = typeof DOC_TYPES[number];
 
 /**
  * Divide o texto em chunks com overlap para manter coerência semântica.
@@ -207,6 +223,10 @@ export async function addKnowledgeSnippet(prevState: unknown, formData: FormData
   const propertyId = formData.get("propertyId") as string;
   const topic = formData.get("topic") as string;
   const content = formData.get("content") as string;
+  const doc_type = (formData.get("doc_type") as string) || "other";
+  const language = (formData.get("language") as string) || "en";
+  const room_scope = (formData.get("room_scope") as string) || "all";
+  const is_staff_only = formData.get("is_staff_only") === "true";
 
   if (!propertyId || !topic || !content) {
     return { error: "Please provide topic and content." };
@@ -225,6 +245,10 @@ export async function addKnowledgeSnippet(prevState: unknown, formData: FormData
         content,
         embedding,
         source_file: "manual_entry",
+        doc_type,
+        language,
+        room_scope,
+        is_staff_only,
       });
 
     if (error) throw error;
@@ -263,6 +287,10 @@ export async function deleteKnowledgeSnippet(id: string) {
 export async function uploadKnowledgeFile(prevState: unknown, formData: FormData) {
   const propertyId = formData.get("propertyId") as string;
   const file = formData.get("file") as File;
+  const doc_type = (formData.get("doc_type") as string) || "other";
+  const language = (formData.get("language") as string) || "en";
+  const room_scope = (formData.get("room_scope") as string) || "all";
+  const is_staff_only = formData.get("is_staff_only") === "true";
 
   if (!propertyId || !file || file.size === 0) {
     return { error: "Please select a valid file." };
@@ -274,7 +302,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
 
   const ext = "." + file.name.split(".").pop()?.toLowerCase();
   if (!ALLOWED_EXTENSIONS.includes(ext)) {
-    return { error: "Unsupported file extension." };
+    return { error: "Unsupported file type. Accepted: PDF, TXT." };
   }
 
   const context = await getTenantContext();
@@ -283,7 +311,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
   // Rate Limit Check
   if (ratelimit) {
     const { success } = await ratelimit.limit(context.user.id);
-    if (!success) return { error: "Limite de uploads atingido. Tente novamente em 1 minuto." };
+    if (!success) return { error: "Upload limit reached. Please wait 1 minute." };
   }
 
   try {
@@ -291,8 +319,8 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    if (file.type === "application/pdf") {
-      // Magic bytes check
+    if (file.type === "application/pdf" || ext === ".pdf") {
+      // Magic bytes check for PDF integrity
       const magic = buffer.slice(0, 4).toString("ascii");
       if (!magic.startsWith("%PDF")) return { error: "Invalid PDF file." };
 
@@ -305,6 +333,7 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
       const data = await pdf(buffer);
       text = data.text;
     } else {
+      // TXT — UTF-8 decode
       text = buffer.toString("utf-8");
     }
 
@@ -317,42 +346,55 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
       .trim();
 
     const chunks = chunkText(cleanedText);
-    
-    // Clear old data for this file
+
+    // Remove previous chunks for this exact source file (re-upload = replace)
     await context.admin
       .from("property_knowledge")
       .delete()
       .eq("property_id", propertyId)
       .eq("source_file", file.name);
 
-    // Process in batches
+    // Process and insert in batches of 5 (parallel embeddings per batch)
     const BATCH_SIZE = 5;
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE);
-      const rows = await Promise.all(batch.map(async (chunk, idx) => {
-        const embedding = await generateEmbedding(chunk);
-        return {
-          property_id: propertyId,
-          source_file: file.name,
-          topic: `${file.name} (Part ${i + idx + 1})`,
-          content: chunk,
-          embedding,
-          chunk_index: i + idx,
-        };
-      }));
+      const rows = await Promise.all(
+        batch.map(async (chunk, idx) => {
+          const embedding = await generateEmbedding(chunk);
+          return {
+            property_id: propertyId,
+            source_file: file.name,
+            topic: `${file.name} — Part ${i + idx + 1}`,
+            content: chunk,
+            embedding,
+            chunk_index: i + idx,
+            doc_type,
+            language,
+            room_scope,
+            is_staff_only,
+          };
+        })
+      );
 
       const { error: insertError } = await context.admin
         .from("property_knowledge")
         .insert(rows);
-      
+
       if (insertError) throw insertError;
     }
 
     revalidatePath("/dashboard", "layout");
-    return { success: true, message: `Processed ${chunks.length} segments.` };
+    return {
+      success: true,
+      message: `Successfully processed ${chunks.length} knowledge segments from "${file.name}".`,
+    };
   } catch (err) {
-    console.error("Upload error:", err);
-    return { error: `Processing error: ${err instanceof Error ? err.message : "Unknown error"}` };
+    console.error("[UPLOAD] Error:", err);
+    return {
+      error: `Processing error: ${
+        err instanceof Error ? err.message : "Unknown error"
+      }`,
+    };
   }
 }
 
