@@ -231,17 +231,20 @@ export function DashboardShell({
           </nav>
 
           <div className="mt-auto pt-8">
-            <button
-              onClick={() => signOut()}
-              className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-muted transition hover:bg-red-50 hover:text-red-600"
-            >
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em]">LO</span>
-              <div className="text-left">
-                <p className="font-semibold">Logout</p>
-                <p className="text-xs uppercase tracking-[0.24em] opacity-70">Exit Session</p>
-              </div>
-            </button>
+            <form action={signOut}>
+              <button
+                type="submit"
+                className="flex w-full items-center gap-4 rounded-2xl px-4 py-3 text-muted transition hover:bg-red-50 hover:text-red-600"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-stone-100 text-xs font-semibold tracking-[0.2em]">LO</span>
+                <div className="text-left">
+                  <p className="font-semibold">Logout</p>
+                  <p className="text-xs uppercase tracking-[0.24em] opacity-70">Exit Session</p>
+                </div>
+              </button>
+            </form>
           </div>
+
         </aside>
 
         {/* Main Content */}
