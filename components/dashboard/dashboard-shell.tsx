@@ -18,7 +18,7 @@ import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";
 import { KnowledgeTestChat } from "./knowledge-test-chat";
 import { QrManagement } from "./qr-management";
-import { AdminForms } from "../admin/admin-forms";
+import { AdminForms, type AdminOrganization, type AdminProfile } from "../admin/admin-forms";
 
 const navigationItems = [
   { id: "overview", label: "Overview", short: "OV" },
@@ -112,8 +112,8 @@ interface DashboardRequest {
   id: string;
   unit: string;
   property: string;
-  type: any;
-  status: any;
+  type: string;
+  status: string;
   createdAt: string;
   assignedTo?: string | null;
   issue?: string | null;
@@ -157,8 +157,8 @@ export function DashboardShell({
     typeCounts: Record<string, number>;
     topIssues: { topic: string; count: number }[];
   };
-  allOrganizations?: any[];
-  allProfiles?: any[];
+  allOrganizations?: AdminOrganization[];
+  allProfiles?: AdminProfile[];
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id || "");
