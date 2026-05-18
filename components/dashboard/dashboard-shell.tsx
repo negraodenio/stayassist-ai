@@ -10,9 +10,8 @@ import {
   sendTestWhatsAppAlert,
   createProperty,
   createOrganization,
-  DOC_TYPES,
-  type DocType,
 } from "@/app/dashboard/actions";
+import { DOC_TYPES, type DocType } from "@/lib/knowledge-types";
 import { KanbanBoard } from "./kanban-board";
 import { signOut } from "@/app/login/actions";
 import { formatDistanceToNow } from "date-fns";

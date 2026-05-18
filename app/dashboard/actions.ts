@@ -8,6 +8,7 @@ import {
 } from "@/lib/tenant-auth";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { DOC_TYPES, type DocType } from "@/lib/knowledge-types";
 
 const ratelimit = process.env.UPSTASH_REDIS_REST_URL 
   ? new Ratelimit({
@@ -159,21 +160,8 @@ const CHUNK_OVERLAP = 100;    // overlap to maintain semantic coherence
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_EXTENSIONS = [".pdf", ".txt"];
 
-// Valid doc_type values for the Knowledge Base
-export const DOC_TYPES = [
-  "manual",
-  "sop",
-  "faq",
-  "tourism",
-  "emergency",
-  "concierge",
-  "policy",
-  "appliance",
-  "multilingual",
-  "other",
-] as const;
+// DOC_TYPES imported from lib/knowledge-types for internal use only
 
-export type DocType = typeof DOC_TYPES[number];
 
 /**
  * Divide o texto em chunks com overlap para manter coerência semântica.
