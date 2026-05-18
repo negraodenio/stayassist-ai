@@ -24,7 +24,8 @@ export async function getOrganizationsAction() {
 export async function createOrganizationAction(name: string) {
   await ensureAdmin();
   const admin = createAdminClient();
-  const { data, error } = await admin.from("organizations").insert({ name }).select().single();
+  const slug = name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
+  const { data, error } = await admin.from("organizations").insert({ name, slug }).select().single();
   if (error) throw error;
   revalidatePath("/admin-master");
   return data;
@@ -45,8 +46,10 @@ export async function createPropertyAction(name: string, organizationId: string)
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const admin = createAdminClient();
+  const slug = name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") + "-" + Math.random().toString(36).substring(2, 7);
   const { data, error } = await admin.from("properties").insert({ 
     name, 
+    slug,
     organization_id: organizationId,
     user_id: user?.id 
   }).select().single();
