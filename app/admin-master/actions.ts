@@ -77,7 +77,9 @@ export async function createUserAction(email: string, role: string, organization
   const adminClient = createAdminClient();
   
   // 1. Create the Auth user with a temp password
-  const tempPassword = "MaliaTempPassword123!";
+  // Generate a random 10-character password with required complexity (letters, numbers, special char)
+  const tempPassword = Math.random().toString(36).substring(2, 10) + "M@lia" + Math.floor(Math.random() * 100);
+  
   const { data: authUser, error: authError } = await adminClient.auth.admin.createUser({
     email,
     password: tempPassword,
