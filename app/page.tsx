@@ -13,15 +13,21 @@ export default function HomePage() {
         {/* Left Column: Hero Copy & CTA */}
         <div className="max-w-2xl lg:sticky lg:top-24">
           <p className="text-xs font-semibold uppercase tracking-[0.34em] text-accent-strong">
-            Luxury guest operations
+            The world's premier AI Concierge
           </p>
           <h1 className="mt-4 font-display text-5xl leading-tight tracking-tight text-navy sm:text-6xl">
-            Hospitality AI designed for modern premium stays.
+            The finest online concierge for Hotels and Airbnbs.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-8 text-muted sm:text-lg">
-            Centralize concierge operations, guest requests, and property intelligence in one polished workspace built for boutique hotels and luxury residences.
+            Elevate your guest experience with intelligent automation, seamless requests, and property intelligence in one polished workspace.
           </p>
-          
+
+          <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-border/60 bg-white/40 py-2 pl-3 pr-5 text-sm text-navy shadow-sm backdrop-blur-sm">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+            </span>
+            <span><strong className="font-semibold">Coming next:</strong> Press to Talk. Our exclusive, discreet hardware.</span>
+          </div>
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <Link
               href="/login"
