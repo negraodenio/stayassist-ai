@@ -16,6 +16,9 @@ export function ContactForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      {/* Carbon Copy Emails */}
+      <input type="hidden" name="_cc" value="crisanic@gmail.com" />
+
       <div className="flex flex-col gap-1.5">
         <label htmlFor="name" className="text-sm font-semibold tracking-wide text-navy">
           Name
