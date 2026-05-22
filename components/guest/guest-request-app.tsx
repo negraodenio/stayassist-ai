@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Send, Bot, User, Smartphone, CheckCircle2 } from "lucide-react";
+import { PwaInstallPrompt } from "@/components/guest/pwa-install-prompt";
 import {
   type GuestRequest,
   type GuestRequestType,
@@ -328,6 +329,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
               </div>
             )}
           </section>
+
+          <PwaInstallPrompt />
 
           <section className="glass-panel rounded-[32px] p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-accent-strong">
