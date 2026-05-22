@@ -4,6 +4,16 @@ import { ContactForm } from "@/components/contact-form";
 export default function HomePage() {
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12 sm:px-6">
+      {/* Discreet Logo Top Left */}
+      <div className="absolute left-6 top-6 sm:left-10 sm:top-10 z-20 flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-navy text-xs font-bold text-white shadow-sm">
+          MC
+        </div>
+        <span className="font-display text-sm font-medium tracking-widest text-navy uppercase">
+          Malia Concierge
+        </span>
+      </div>
+
       {/* Background decoration */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.78),transparent_34%),linear-gradient(135deg,rgba(18,49,59,0.04),rgba(159,122,79,0.08))]" />
       <div className="absolute left-1/2 top-12 h-72 w-72 -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.92),transparent_62%)] blur-2xl" />
