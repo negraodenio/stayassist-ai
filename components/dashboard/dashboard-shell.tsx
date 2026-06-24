@@ -158,6 +158,7 @@ export function DashboardShell({
   };
   allOrganizations?: AdminOrganization[];
   allProfiles?: AdminProfile[];
+  isMasterAdmin?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [selectedPropertyId, setSelectedPropertyId] = useState(properties[0]?.id || "");
@@ -211,7 +212,7 @@ export function DashboardShell({
               </button>
             ))}
             
-            {userEmail === "negraodenio@gmail.com" && (
+            {isMasterAdmin && (
               <button
                 onClick={() => setActiveTab("admin")}
                 className={`w-full flex items-center gap-4 rounded-2xl px-4 py-3 transition hover:bg-amber-500/10 ${

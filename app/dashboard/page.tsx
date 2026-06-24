@@ -200,6 +200,7 @@ export default async function DashboardPage() {
       whatsappAlertPhone={whatsappAlertPhone}
       hasTwilioContentSid={hasTwilioContentSid}
       userEmail={user?.email || undefined}
+      isMasterAdmin={user?.email === process.env.MASTER_ADMIN_EMAIL || isSuperAdmin}
       metrics={{
         today: todayRes.count || 0,
         week: weekRes.count || 0,

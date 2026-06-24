@@ -8,7 +8,7 @@ import {
 } from "@/components/admin/admin-forms";
 import Link from "next/link";
 
-const ADMIN_EMAIL = "negraodenio@gmail.com";
+const ADMIN_EMAIL = process.env.MASTER_ADMIN_EMAIL || "negraodenio@gmail.com";
 
 type Related<T> = T | T[] | null | undefined;
 

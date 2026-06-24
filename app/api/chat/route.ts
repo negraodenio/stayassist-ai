@@ -105,8 +105,7 @@ async function getKnowledgeWithFallback(
 
   if (highConfidence.length > 0) return highConfidence;
 
-  // Pass 2 — broader fallback (log so we can tune over time)
-  console.log(`[RAG] No results at 0.5 — falling back to 0.3 for property ${propertyId}`);
+  // Pass 2 — broader fallback
   return getKnowledge(embedding, propertyId, {
     isGuest,
     roomScope,
@@ -168,7 +167,7 @@ export async function POST(req: Request) {
         .single();
       if (prop) propAddress = prop.address || "";
     } catch (e) {
-      console.error("[CHAT] Metadata fetch error:", e);
+      // Ignore metadata fetch error
     }
 
     // 3. RAG retrieval — two-pass with guest/staff isolation and room scope
@@ -200,7 +199,7 @@ export async function POST(req: Request) {
           knowledgeContext = selected.join("\n\n---\n\n").slice(0, 4500);
         }
       } catch (e) {
-        console.error("[CHAT] RAG retrieval error:", e);
+        // Ignore RAG retrieval error
       }
     }
 
@@ -235,7 +234,7 @@ export async function POST(req: Request) {
                 status: "open",
                 createdAt: new Date().toISOString(),
                 guestMessage: userMessageContent,
-              }).catch((e) => console.error("[CHAT] WA alert error:", e));
+              }).catch(() => {});
             }
           }
 
@@ -256,7 +255,7 @@ export async function POST(req: Request) {
             content: text,
           }).catch(() => {});
         } catch (e) {
-          console.error("[CHAT] onFinish error:", e);
+          // Ignore onFinish error
         }
       },
     });
@@ -269,7 +268,6 @@ export async function POST(req: Request) {
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[CHAT FATAL]", message);
     return new Response(message, { status: 500 });
   }
 }

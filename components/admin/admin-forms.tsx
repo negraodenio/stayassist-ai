@@ -41,9 +41,13 @@ export function AdminForms({
     if (!orgName) return;
     setLoading(true);
     try {
-      await createOrganizationAction(orgName);
-      setOrgName("");
-      setMessage("Organization created successfully!");
+      const result = await createOrganizationAction(orgName);
+      if (result.error) {
+        setMessage("Error: " + result.error);
+      } else {
+        setOrgName("");
+        setMessage("Organization created successfully!");
+      }
     } catch (error) {
       setMessage("Error: " + errorMessage(error));
     } finally {
@@ -56,9 +60,13 @@ export function AdminForms({
     if (!propName || !selectedOrgId) return;
     setLoading(true);
     try {
-      await createPropertyAction(propName, selectedOrgId);
-      setPropName("");
-      setMessage("Property created successfully!");
+      const result = await createPropertyAction(propName, selectedOrgId);
+      if (result.error) {
+        setMessage("Error: " + result.error);
+      } else {
+        setPropName("");
+        setMessage("Property created successfully!");
+      }
     } catch (error) {
       setMessage("Error: " + errorMessage(error));
     } finally {
@@ -72,8 +80,12 @@ export function AdminForms({
     setLoading(true);
     try {
       const result = await createUserAction(userEmail, userRole, userOrgId);
-      setUserEmail("");
-      setMessage(`User created! Temp Password: ${result.tempPassword}`);
+      if (result.error) {
+        setMessage("Error: " + result.error);
+      } else {
+        setUserEmail("");
+        setMessage(`User created! Temp Password: ${result.tempPassword}`);
+      }
     } catch (error) {
       setMessage("Error: " + errorMessage(error));
     } finally {

@@ -377,7 +377,6 @@ export async function uploadKnowledgeFile(prevState: unknown, formData: FormData
       message: `Successfully processed ${chunks.length} knowledge segments from "${file.name}".`,
     };
   } catch (err) {
-    console.error("[UPLOAD] Error:", err);
     return {
       error: `Processing error: ${
         err instanceof Error ? err.message : "Unknown error"
@@ -398,7 +397,6 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
   // Automagicamente buscar lat/long pelo CEP se estiverem vazios
   if (zip_code && (isNaN(latitude) || isNaN(longitude))) {
     try {
-      console.log(`[GEOCODE] Buscando coordenadas para o CEP: ${zip_code}`);
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(zip_code)}&key=${process.env.GOOGLE_PLACES_API_KEY}`
       );
@@ -408,12 +406,9 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
         const { lat, lng } = data.results[0].geometry.location;
         latitude = lat;
         longitude = lng;
-        console.log(`[GEOCODE] Sucesso: ${lat}, ${lng}`);
-      } else {
-        console.warn(`[GEOCODE] Google retornou status: ${data.status}`);
       }
     } catch (e) {
-      console.error("[GEOCODE] Erro na consulta:", e);
+      // Ignorar erro de geocode
     }
   }
 
@@ -432,7 +427,6 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
       .eq("id", propertyId);
 
     if (error) {
-      console.error("Supabase Error:", error);
       if (error.message?.includes("column \"zip_code\" does not exist")) {
         return { error: "Erro de Base de Dados: Precisas de adicionar a coluna 'zip_code' no Supabase SQL Editor." };
       }
@@ -442,7 +436,6 @@ export async function updatePropertyLocation(prevState: unknown, formData: FormD
     revalidatePath("/dashboard", "layout");
     return { success: true };
   } catch (err) {
-    console.error("Location update error:", err);
     return { error: "Failed to update location." };
   }
 }
@@ -605,7 +598,6 @@ export async function resolveGuestRequest(id: string) {
     await sendRequestWhatsAppAlert(guestReq, { to });
   } catch (err) {
     // DO NOT block the UI if WhatsApp fails
-    console.error("[WA FAIL ON RESOLVE]", err);
   }
 
   revalidatePath("/dashboard", "layout");

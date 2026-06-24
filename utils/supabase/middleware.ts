@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const ADMIN_EMAIL = "negraodenio@gmail.com";
+const ADMIN_EMAIL = process.env.MASTER_ADMIN_EMAIL || "negraodenio@gmail.com";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
