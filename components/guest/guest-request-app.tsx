@@ -151,7 +151,8 @@ export function GuestRequestApp({ token }: GuestRequestAppProps) {
 
     const controller = new AbortController();
     // CORRECÇÃO: timeout cobre apenas a ligação, é cancelado assim que o stream começa
-    const connectionTimeout = setTimeout(() => controller.abort(), 20000);
+    // Aumentado para 55 segundos para suportar o cold start do Vercel Hobby (limite de 60s)
+    const connectionTimeout = setTimeout(() => controller.abort(), 55000);
 
     try {
       const response = await fetch("/api/chat", {
